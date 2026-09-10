@@ -1,0 +1,578 @@
+<section class="monitor">
+  <!-- ============================ CỘT TRÁI ============================ -->
+  <aside class="panel dms-scroll">
+    <header class="panel__header">
+      <h2>Giám sát lộ trình giao hàng</h2>
+      <p>Đối chiếu lộ trình dự kiến với GPS thực tế, và điều phối đơn phát sinh.</p>
+    </header>
+
+    <label class="field">
+      <span>Chuyến giao hàng</span>
+      <select [value]="store.tripId()" (change)="onSelectTrip($event)">
+        @for (t of store.trips; track t.id) {
+          <option [value]="t.id">{{ t.code }} — {{ t.driverName }}</option>
+        }
+      </select>
+    </label>
+
+    @if (store.trip(); as trip) {
+      <div class="driver">
+        <div class="driver__avatar">{{ trip.driverName.charAt(0) }}</div>
+        <div class="driver__info">
+          <strong>{{ trip.driverName }}</strong>
+          <span>{{ trip.vehiclePlate }} · {{ trip.driverPhone }}</span>
+          <span class="driver__depot">Xuất phát: {{ trip.depot.name }}</span>
+        </div>
+      </div>
+    }
+
+    <!-- KPI -->
+    @if (store.stats(); as stats) {
+      <div class="kpi">
+        <div class="kpi__item">
+          <span class="kpi__label">Đã giao</span>
+          <strong class="kpi__value kpi__value--ok">
+            {{ stats.deliveredCount }}/{{ stats.totalStops }}
+          </strong>
+        </div>
+        <div class="kpi__item">
+          <span class="kpi__label">Thất bại</span>
+          <strong class="kpi__value kpi__value--bad">{{ stats.failedCount }}</strong>
+        </div>
+        <div class="kpi__item">
+          <span class="kpi__label">Tới trễ</span>
+          <strong class="kpi__value kpi__value--warn">{{ stats.lateCount }}</strong>
+        </div>
+        <div class="kpi__item">
+          <span class="kpi__label">Dự kiến</span>
+          <strong class="kpi__value">{{ formatDistance(stats.plannedDistanceMeters) }}</strong>
+        </div>
+        <div class="kpi__item">
+          <span class="kpi__label">Thực tế</span>
+          <strong class="kpi__value">{{ formatDistance(stats.actualDistanceMeters) }}</strong>
+        </div>
+        <div class="kpi__item">
+          <span class="kpi__label">Chênh lệch</span>
+          <strong class="kpi__value" [class.kpi__value--warn]="distanceDelta() > 500">
+            {{ distanceDelta() > 0 ? '+' : '' }}{{ formatDistance(distanceDelta()) }}
+          </strong>
+        </div>
+        <div class="kpi__item kpi__item--wide">
+          <span class="kpi__label">Đã thu</span>
+          <strong class="kpi__value">{{ stats.collectedAmount | number: '1.0-0' }} ₫</strong>
+        </div>
+      </div>
+
+      @if (stats.maxDeviationMeters > 0) {
+        <div class="alert alert--danger">
+          <strong>Cảnh báo lệch tuyến</strong>
+          {{ stats.deviationCount }} điểm GPS nằm ngoài lộ trình dự kiến, xa nhất
+          {{ formatDistance(stats.maxDeviationMeters) }}.
+          @if (store.hasEdits()) {
+            <em class="alert__hint">
+              Tuyến vừa bị sửa nên "chuẩn" để so đã đổi — phần đường xe đã đi theo kế hoạch cũ
+              có thể bị tính là lệch.
+            </em>
+          }
+        </div>
+      }
+    }
+
+    <!-- ============ CHẤT LƯỢNG DỮ LIỆU GPS & KHỚP ĐƯỜNG ============ -->
+    <details class="quality" open>
+      <summary>Độ chính xác dữ liệu GPS</summary>
+
+      @if (store.trackQuality(); as q) {
+        <div class="quality__grid">
+          <span>Bản ghi nhận được</span>
+          <b>{{ q.totalPoints }}</b>
+
+          <span>Nhịp lấy mẫu</span>
+          <b>~{{ q.medianIntervalSeconds }} giây/điểm</b>
+
+          <span>Đã loại nhiễu</span>
+          <b [class.bad]="q.removedOutliers > 0">
+            {{ q.removedOutliers }} nhảy cóc · {{ q.removedJitter }} rung khi đứng
+          </b>
+
+          <span>Mất tín hiệu</span>
+          <b [class.bad]="q.gaps > 0">{{ q.gaps }} lần</b>
+        </div>
+
+        <!-- Ba mức độ tin cậy của cùng một con số "quãng đường thực tế".
+             Trưng cả ba cạnh nhau để thấy sai số do đâu mà ra. -->
+        <div class="quality__ladder">
+          <div class="quality__step">
+            <small>GPS thô</small>
+            <strong>{{ formatDistance(store.rawDistanceMeters()) }}</strong>
+          </div>
+          <div class="quality__step quality__step--mid">
+            <small>Đã lọc nhiễu</small>
+            <strong>{{ formatDistance(store.stats().actualDistanceMeters) }}</strong>
+            <em>
+              −{{ formatDistance(store.rawDistanceMeters() - store.stats().actualDistanceMeters) }}
+            </em>
+          </div>
+          <div class="quality__step" [class.quality__step--best]="store.matchedPath().length > 1">
+            <small>Khớp vào đường</small>
+            @if (store.matchedPath().length > 1) {
+              <strong>{{ formatDistance(store.matchedDistanceMeters()) }}</strong>
+              <em>chính xác nhất</em>
+            } @else {
+              <strong>—</strong>
+              <em>chưa chạy</em>
+            }
+          </div>
+        </div>
+      }
+
+      <button
+        class="btn btn--primary quality__run"
+        type="button"
+        [disabled]="store.matching() || !store.trackLength()"
+        (click)="store.runMapMatching()"
+      >
+        @if (store.matching()) {
+          Đang khớp đường… {{ Math.round(store.matchProgress() * 100) }}%
+        } @else {
+          Khớp GPS vào mạng đường (map matching)
+        }
+      </button>
+
+      @if (store.matching()) {
+        <div class="quality__progress">
+          <div [style.width.%]="store.matchProgress() * 100"></div>
+        </div>
+      }
+
+      @if (store.matchResult(); as m) {
+        <div class="quality__result">
+          <p>
+            Sai số GPS trung bình <strong>{{ formatDistance(m.avgOffsetMeters) }}</strong>
+            so với tim đường, xa nhất {{ formatDistance(m.maxOffsetMeters) }}.
+            Độ tin cậy khớp {{ Math.round(m.confidence * 100) }}%,
+            bám được {{ Math.round(m.matchedRatio * 100) }}% số điểm.
+          </p>
+          <p class="quality__note">
+            Chia thành {{ m.chunks }} lô (server công cộng chỉ nhận 10 điểm/lần)
+            @if (m.failedChunks) {
+              <span class="bad">, {{ m.failedChunks }} lô không khớp được và giữ nguyên GPS thô</span>
+            }.
+          </p>
+        </div>
+      }
+    </details>
+
+    <!-- ==================== CẢNH BÁO CỦA CHUYẾN ==================== -->
+    @if (store.alerts().length) {
+      <details class="alerts-box">
+        <summary>Cảnh báo ({{ store.alerts().length }})</summary>
+        <ul>
+          @for (a of store.alerts(); track trackAlert($index, a)) {
+            <li [attr.data-severity]="a.severity" (click)="store.focusAlert(a)">
+              <span class="alerts-box__icon">{{ alertIcon[a.type] }}</span>
+              <div>
+                <strong>{{ a.title }}</strong>
+                <small>{{ a.detail }}</small>
+              </div>
+            </li>
+          }
+        </ul>
+      </details>
+    }
+
+    <!-- ============ ĐỐI SOÁT ĐIỂM GIAO BẰNG GPS (geofence) ============ -->
+    @if (store.suspiciousStops().length) {
+      <div class="alert alert--danger">
+        <strong>Nghi vấn giao khống</strong>
+        {{ store.suspiciousStops().length }} điểm được báo đã xử lý nhưng GPS chưa từng vào
+        bán kính {{ store.geofenceRadius }} m quanh địa chỉ khách.
+        <em class="alert__hint">
+          Bật lớp "Geofence" trên bản đồ để xem xe đã tới gần nhất bao nhiêu mét.
+        </em>
+      </div>
+    }
+
+    <!-- =================== ĐIỀU PHỐI: THÊM ĐIỂM GIAO =================== -->
+    <div class="dispatch">
+      <div class="dispatch__head">
+        <button class="btn btn--primary" type="button" (click)="store.toggleForm()">
+          {{ store.formOpen() ? '✕ Đóng' : '＋ Thêm điểm giao' }}
+        </button>
+        @if (store.hasEdits()) {
+          <button class="btn btn--ghost" type="button" (click)="store.resetPlan()">
+            ↺ Kế hoạch gốc
+          </button>
+        }
+        <button
+          class="btn btn--ghost"
+          type="button"
+          [disabled]="store.pendingStops().length < 3"
+          (click)="store.optimizeRemaining()"
+          title="Sắp xếp lại các điểm CHƯA GIAO cho tổng đường ngắn nhất"
+        >
+          ✨ Tối ưu chặng còn lại
+        </button>
+      </div>
+
+      @if (store.formOpen()) {
+        <div class="form">
+          <div class="search">
+            <input
+              type="search"
+              placeholder="Tìm địa chỉ khách hàng…"
+              [value]="store.query()"
+              (input)="onQuery($event)"
+            />
+            @if (store.searchResults.isLoading()) {
+              <span class="search__spinner"></span>
+            }
+            @if (searchItems().length) {
+              <ul class="search__results">
+                @for (item of searchItems(); track item.displayName) {
+                  <li>
+                    <button type="button" (click)="onPickResult(item)">
+                      <strong>{{ item.shortName }}</strong>
+                      <small>{{ item.displayName }}</small>
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+            <small class="search__source">Nguồn: {{ store.geocodeProviderLabel() }}</small>
+          </div>
+
+          <button
+            class="btn"
+            type="button"
+            [class.btn--active]="store.pickMode()"
+            (click)="store.togglePickMode()"
+          >
+            {{ store.pickMode() ? '● Bấm lên bản đồ để chọn vị trí' : '📍 Chọn vị trí trên bản đồ' }}
+          </button>
+
+          <label class="field">
+            <span>Tên khách hàng</span>
+            <input
+              type="text"
+              placeholder="VD: Tạp hoá Cô Ba"
+              [value]="store.draft().customerName"
+              (input)="onDraftText('customerName', $event)"
+            />
+          </label>
+
+          <label class="field">
+            <span>Địa chỉ</span>
+            <input
+              type="text"
+              placeholder="Tự điền sau khi chọn vị trí"
+              [value]="store.draft().address"
+              (input)="onDraftText('address', $event)"
+            />
+          </label>
+
+          <div class="field-row">
+            <label class="field">
+              <span>Giá trị đơn (₫)</span>
+              <input
+                type="number"
+                min="0"
+                step="100000"
+                [value]="store.draft().amount"
+                (input)="onDraftAmount($event)"
+              />
+            </label>
+
+            <label class="field">
+              <span>Chèn vào</span>
+              <select [value]="store.draft().position" (change)="onDraftPosition($event)">
+                <option value="auto">Tự động — khe rẻ nhất</option>
+                @for (opt of insertOptions(); track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Ghi chú</span>
+            <input
+              type="text"
+              placeholder="VD: Đơn gấp, khách gọi thêm"
+              [value]="store.draft().note"
+              (input)="onDraftText('note', $event)"
+            />
+          </label>
+
+          @if (store.draftPreview(); as preview) {
+            <div class="preview">
+              <strong>Xem trước</strong>
+              Đội thêm khoảng <b>{{ formatDistance(preview.extraMeters) }}</b> đường chim bay,
+              @if (preview.beforeStop) {
+                chèn trước điểm {{ preview.beforeStop.seq }} — {{ preview.beforeStop.customerName }}.
+              } @else {
+                chèn vào cuối tuyến, ngay trước khi về kho.
+              }
+              <em>Cộng thêm {{ serviceMinutes }} phút đứng giao tại điểm mới.</em>
+            </div>
+          }
+
+          <button
+            class="btn btn--primary"
+            type="button"
+            [disabled]="!store.canSubmitDraft()"
+            (click)="store.addStop()"
+          >
+            Chèn vào tuyến &amp; tính lại
+          </button>
+        </div>
+      }
+
+      <!-- Tác động của việc sửa tuyến -->
+      @if (store.impact(); as impact) {
+        @if (impact.changed) {
+          <div class="alert alert--info">
+            <strong>Kế hoạch đã bị sửa</strong>
+            <div class="impact">
+              <span>Điểm thêm mới</span><b>{{ impact.addedStops }}</b>
+              <span>Điểm gỡ ra</span><b>{{ impact.removedStops }}</b>
+              <span>Đường đội thêm</span>
+              <b [class.bad]="impact.extraDistanceMeters > 0">
+                {{ impact.extraDistanceMeters > 0 ? '+' : ''
+                }}{{ formatDistance(Math.abs(impact.extraDistanceMeters)) }}
+              </b>
+              <span>Thời gian đội thêm</span>
+              <b [class.bad]="impact.extraDurationSeconds > 0">
+                {{ impact.extraDurationSeconds > 0 ? '+' : ''
+                }}{{ formatDuration(Math.abs(impact.extraDurationSeconds)) }}
+              </b>
+              <span>Điểm bị đẩy lịch</span>
+              <b [class.bad]="impact.shiftedStops > 0">{{ impact.shiftedStops }}</b>
+              <span>Đẩy nhiều nhất</span>
+              <b [class.bad]="impact.maxShiftMinutes > 15">{{ impact.maxShiftMinutes }}′</b>
+            </div>
+          </div>
+        }
+
+        @if (impact.backToDepotEta) {
+          <div class="depot-eta">
+            Dự kiến về kho lúc <strong>{{ formatTime(impact.backToDepotEta) }}</strong>
+            · còn {{ store.pendingStops().length }} điểm chưa giao
+            @if (store.loadingRemaining()) {
+              <em>đang tính lại…</em>
+            }
+          </div>
+        }
+      }
+    </div>
+
+    <!-- Lớp hiển thị -->
+    <div class="layers">
+      <button type="button" [class.on]="store.showPlanned()" (click)="store.togglePlanned()">
+        <i class="swatch swatch--planned"></i> Dự kiến
+      </button>
+      <button type="button" [class.on]="store.showActual()" (click)="store.toggleActual()">
+        <i class="swatch swatch--actual"></i> Thực tế
+      </button>
+      <button type="button" [class.on]="store.showRemaining()" (click)="store.toggleRemaining()">
+        <i class="swatch swatch--remaining"></i> Chặng còn lại
+      </button>
+      <button type="button" [class.on]="store.showGpsPoints()" (click)="store.toggleGpsPoints()">
+        <i class="swatch swatch--gps"></i> Điểm GPS
+      </button>
+      <button
+        type="button"
+        [class.on]="store.showMatched()"
+        [disabled]="store.matchedPath().length < 2"
+        (click)="store.toggleMatched()"
+        title="Hiện đường đã khớp vào mạng đường"
+      >
+        <i class="swatch swatch--matched"></i> Khớp đường
+      </button>
+      <button type="button" [class.on]="store.showGeofence()" (click)="store.toggleGeofence()">
+        <i class="swatch swatch--fence"></i> Geofence
+      </button>
+    </div>
+
+    <!-- ==================== ĐIỂM DỪNG PHÁT HIỆN TỪ GPS ==================== -->
+    @if (store.stopEvents().length) {
+      <details class="stops-detected">
+        <summary>Điểm dừng phát hiện từ GPS ({{ store.stopEvents().length }})</summary>
+        <ul>
+          @for (event of store.stopEvents(); track event.fromIndex; let i = $index) {
+            <li [class.unplanned]="!store.stopEventLabels()[i]">
+              <strong>{{ formatTime(event.startIso) }} — {{ event.minutes }} phút</strong>
+              <small>
+                @if (store.stopEventLabels()[i]; as name) {
+                  tại {{ name }}
+                } @else {
+                  ngoài kế hoạch — không có điểm giao nào trong bán kính
+                  {{ store.geofenceRadius }} m
+                }
+              </small>
+            </li>
+          }
+        </ul>
+      </details>
+    }
+
+    <!-- Bảng điểm giao -->
+    <div class="stops">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Điểm giao</th>
+            <th>KH</th>
+            <th>TT/ETA</th>
+            <th>Lệch</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (stop of store.trip()?.stops ?? []; track stop.id; let i = $index) {
+            <tr
+              [class.selected]="store.selectedStopId() === stop.id"
+              [class.locked]="!store.canEditStop(stop)"
+              [class.adhoc]="stop.isAdHoc"
+              (click)="onRowClick(stop)"
+            >
+              <td>
+                <span class="seq" [style.background]="store.stopColor(stop)">{{ stop.seq }}</span>
+              </td>
+              <td>
+                <strong>
+                  {{ stop.customerName }}
+                  @if (stop.isAdHoc) {
+                    <em class="tag">phát sinh</em>
+                  }
+                </strong>
+                <small>
+                  {{ stop.orderCode }} · {{ statusLabel[stop.status] }}
+                  <!-- Đối soát bằng GPS: dấu ✓ nghĩa là máy xác nhận, không phải
+                       người khai. Xem `stopVerification` trong store. -->
+                  @if (store.stopVerification().get(stop.id); as check) {
+                    @if (check.entered) {
+                      <em class="verify verify--ok" title="GPS xác nhận xe đã vào tới nơi">✓ GPS</em>
+                    } @else if (stop.status !== 'pending') {
+                      <em
+                        class="verify verify--bad"
+                        [title]="'GPS chỉ tới gần nhất ' + check.closestMeters + ' m'"
+                      >
+                        ⚠ {{ check.closestMeters }}m
+                      </em>
+                    }
+                  }
+                </small>
+                @if (stop.note) {
+                  <small class="note">{{ stop.note }}</small>
+                }
+              </td>
+              <td>{{ stop.plannedArrival ? formatTime(stop.plannedArrival) : '—' }}</td>
+              <td [class.eta]="!stop.actualArrival">{{ arrivalText(stop) }}</td>
+              <td
+                [class.late]="store.lateMinutes(stop) > 15 || (store.etaOf(stop)?.shiftMinutes ?? 0) > 15"
+                [class.early]="store.lateMinutes(stop) < 0"
+              >
+                {{ lateText(stop) }}
+              </td>
+              <td class="row-actions" (click)="$event.stopPropagation()">
+                @if (store.canEditStop(stop)) {
+                  <button
+                    type="button"
+                    title="Ghé sớm hơn"
+                    [disabled]="i <= store.lockedCount()"
+                    (click)="store.moveStop(stop.id, -1)"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    title="Ghé muộn hơn"
+                    [disabled]="i >= (store.trip()?.stops?.length ?? 1) - 1"
+                    (click)="store.moveStop(stop.id, 1)"
+                  >
+                    ↓
+                  </button>
+                  <button type="button" title="Gỡ khỏi tuyến" (click)="store.removeStop(stop.id)">
+                    ✕
+                  </button>
+                } @else {
+                  <span class="lock" title="Đã giao — không sửa được">🔒</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (remainingDirectionUrl(); as url) {
+      <a class="btn btn--ghost" [href]="url" target="_blank" rel="noopener">
+        Chỉ đường các điểm còn lại trên Google Maps
+      </a>
+    }
+  </aside>
+
+  <!-- ============================ BẢN ĐỒ ============================ -->
+  <div class="map">
+    <dms-map-surface
+      [markers]="store.markers()"
+      [paths]="store.paths()"
+      [circles]="store.circles()"
+      [vehicle]="store.vehicle()"
+      [pickMode]="store.pickMode()"
+      [focus]="store.focus()"
+      [fitToken]="fitToken()"
+      (mapClick)="onMapClick($event)"
+      (markerClick)="store.selectStop($any($event).data?.id ?? null)"
+    />
+
+    @if (store.pickMode()) {
+      <div class="map__badge map__badge--pick">Bấm lên bản đồ để đặt điểm giao mới</div>
+    } @else if (store.loadingTrip() || store.loadingPlanned()) {
+      <div class="map__badge">Đang dựng lộ trình…</div>
+    }
+
+    @if (store.routingError(); as message) {
+      <div class="map__badge map__badge--error">Lỗi định tuyến: {{ message }}</div>
+    }
+
+    <!-- ------------------------ THANH TUA LẠI ------------------------ -->
+    <div class="player">
+      <button
+        class="player__play"
+        type="button"
+        [disabled]="!store.trackLength()"
+        (click)="store.togglePlay()"
+      >
+        {{ store.playing() ? '❚❚' : '▶' }}
+      </button>
+
+      <div class="player__body">
+        <input
+          class="player__range"
+          type="range"
+          min="0"
+          [max]="Math.max(0, store.trackLength() - 1)"
+          [value]="store.cursor()"
+          (input)="onSeek($event)"
+        />
+        <div class="player__meta">
+          <span class="player__clock">{{ store.currentTime() || '--:--' }}</span>
+          <span>{{ progressPercent() }}% hành trình</span>
+          @if (store.currentPoint(); as p) {
+            <span>{{ p.speedKmh ?? 0 }} km/h</span>
+            <span>Pin {{ p.battery ?? '--' }}%</span>
+          }
+        </div>
+      </div>
+
+      <select class="player__speed" [value]="store.speed()" (change)="onSpeed($event)">
+        @for (s of speeds; track s) {
+          <option [value]="s">{{ s }}×</option>
+        }
+      </select>
+    </div>
+  </div>
+</section>

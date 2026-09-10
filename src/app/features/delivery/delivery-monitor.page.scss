@@ -1,0 +1,905 @@
+.monitor {
+  display: grid;
+  grid-template-columns: minmax(340px, 400px) 1fr;
+  height: 100%;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------- cột trái */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  overflow-y: auto;
+  background: #fff;
+  border-right: 1px solid var(--border);
+
+  &__header {
+    h2 {
+      margin: 0;
+      font-size: 17px;
+    }
+    p {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+  }
+}
+
+.driver {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+
+  &__avatar {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    font-weight: 700;
+  }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: var(--muted);
+
+    strong {
+      font-size: 14px;
+      color: var(--text);
+    }
+  }
+
+  &__depot {
+    color: #7c3aed;
+  }
+}
+
+/* ---------------------------------------------------------------- KPI */
+.kpi {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+
+  &__item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-2);
+
+    &--wide {
+      grid-column: span 3;
+    }
+  }
+
+  &__label {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  &__value {
+    font-size: 15px;
+
+    &--ok {
+      color: #16a34a;
+    }
+    &--bad {
+      color: #dc2626;
+    }
+    &--warn {
+      color: #d97706;
+    }
+  }
+}
+
+.alert {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+
+  strong {
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  &--danger {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+  }
+
+  &--info {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e40af;
+  }
+
+  &__hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    font-style: italic;
+    opacity: 0.85;
+  }
+}
+
+/* ==================================================== điều phối tuyến */
+.dispatch {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  background: var(--surface-2);
+
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    .btn {
+      flex: 1 1 auto;
+      padding: 7px 10px;
+      font-size: 12px;
+
+      &:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+    }
+  }
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+
+  input,
+  select {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: #fff;
+    font-size: 12.5px;
+    font-family: inherit;
+    color: var(--text);
+
+    &:focus {
+      outline: 2px solid var(--brand);
+      outline-offset: -1px;
+    }
+  }
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* ---------------------------------------------------------- tìm kiếm */
+.search {
+  position: relative;
+
+  input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 12.5px;
+    font-family: inherit;
+
+    &:focus {
+      outline: 2px solid var(--brand);
+      outline-offset: -1px;
+    }
+  }
+
+  &__source {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  &__spinner {
+    position: absolute;
+    top: 11px;
+    right: 12px;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--brand);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  &__results {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgb(15 23 42 / 14%);
+
+    button {
+      display: block;
+      width: 100%;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 8px;
+      background: none;
+      text-align: left;
+      cursor: pointer;
+      font-family: inherit;
+
+      &:hover {
+        background: #f1f5f9;
+      }
+
+      strong {
+        display: block;
+        font-size: 12.5px;
+      }
+      small {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.preview {
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: #fdf2f8;
+  border: 1px solid #fbcfe8;
+  color: #9d174d;
+  font-size: 11.5px;
+  line-height: 1.55;
+
+  strong {
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  em {
+    display: block;
+    margin-top: 3px;
+    opacity: 0.8;
+  }
+}
+
+.impact {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 10px;
+  margin-top: 6px;
+  font-size: 11.5px;
+
+  b {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+
+    &.bad {
+      color: #b91c1c;
+    }
+  }
+}
+
+.depot-eta {
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+
+  strong {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  em {
+    color: var(--brand);
+    font-style: normal;
+  }
+}
+
+/* ------------------------------------------------------------- layers */
+.layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #fff;
+    font-size: 12px;
+    color: var(--muted);
+    cursor: pointer;
+
+    &.on {
+      border-color: var(--brand);
+      background: #eff6ff;
+      color: var(--text);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.swatch {
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+
+  &--planned {
+    background: repeating-linear-gradient(
+      90deg,
+      #7c3aed 0 4px,
+      transparent 4px 7px
+    );
+  }
+  &--actual {
+    background: #0ea5e9;
+  }
+  &--remaining {
+    background: repeating-linear-gradient(90deg, #f59e0b 0 5px, transparent 5px 8px);
+  }
+  &--gps {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #0ea5e9;
+  }
+  &--matched {
+    background: #0284c7;
+  }
+  &--fence {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1.5px dashed #16a34a;
+    background: rgb(22 163 74 / 12%);
+  }
+}
+
+/* ==========================================================================
+   ĐỘ CHÍNH XÁC GPS / KHỚP ĐƯỜNG
+   ========================================================================== */
+
+.quality,
+.alerts-box,
+.stops-detected {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+
+  > summary {
+    padding: 9px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    list-style: none;
+
+    &::after {
+      content: '▾';
+      float: right;
+      color: var(--muted);
+    }
+  }
+
+  &[open] > summary::after {
+    content: '▴';
+  }
+}
+
+.quality__grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  padding: 0 12px 8px;
+  font-size: 11.5px;
+
+  span {
+    color: var(--muted);
+  }
+
+  b {
+    text-align: right;
+    font-weight: 600;
+
+    &.bad {
+      color: #dc2626;
+    }
+  }
+}
+
+/* Ba mức tin cậy của cùng một con số quãng đường. */
+.quality__ladder {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+
+.quality__step {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  text-align: center;
+
+  small {
+    display: block;
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+  }
+
+  strong {
+    display: block;
+    font-size: 13px;
+    margin: 1px 0;
+  }
+
+  em {
+    font-size: 9.5px;
+    font-style: normal;
+    color: #16a34a;
+  }
+
+  &--mid {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+  }
+
+  &--best {
+    border-color: #7dd3fc;
+    background: #f0f9ff;
+
+    strong {
+      color: #0284c7;
+    }
+  }
+}
+
+.quality__run {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 0 12px 10px;
+  padding: 8px;
+  font-size: 12px;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: progress;
+  }
+}
+
+.quality__progress {
+  height: 3px;
+  margin: -6px 12px 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+
+  > div {
+    height: 100%;
+    background: var(--brand);
+    transition: width 0.2s linear;
+  }
+}
+
+.quality__result {
+  padding: 0 12px 10px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #334155;
+
+  p {
+    margin: 0 0 4px;
+  }
+}
+
+.quality__note {
+  color: var(--muted);
+  font-size: 10.5px;
+
+  .bad {
+    color: #dc2626;
+  }
+}
+
+/* ------------------------------------------------------------- cảnh báo */
+
+.alerts-box ul,
+.stops-detected ul {
+  margin: 0;
+  padding: 0 12px 10px;
+  list-style: none;
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.alerts-box li {
+  display: flex;
+  gap: 8px;
+  padding: 7px 8px;
+  margin-bottom: 5px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 9px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--surface-2);
+  }
+
+  strong {
+    display: block;
+    font-size: 12px;
+  }
+
+  small {
+    display: block;
+    font-size: 10.5px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+
+  &[data-severity='high'] {
+    border-left-color: #dc2626;
+    background: #fef2f2;
+  }
+  &[data-severity='medium'] {
+    border-left-color: #f59e0b;
+  }
+  &[data-severity='low'] {
+    border-left-color: #94a3b8;
+  }
+}
+
+.alerts-box__icon {
+  font-size: 14px;
+}
+
+.stops-detected li {
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  background: var(--surface-2);
+
+  strong {
+    display: block;
+    font-size: 11.5px;
+  }
+
+  small {
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+
+  &.unplanned {
+    background: #fffbeb;
+
+    small {
+      color: #b45309;
+    }
+  }
+}
+
+/* Nhãn đối soát GPS trong bảng điểm giao. */
+.verify {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 700;
+
+  &--ok {
+    background: #dcfce7;
+    color: #15803d;
+  }
+
+  &--bad {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+}
+
+/* -------------------------------------------------------------- bảng */
+.stops {
+  flex: 1;
+  min-height: 160px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: auto;
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 8px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--muted);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  tbody tr {
+    cursor: pointer;
+
+    &:hover {
+      background: #f8fafc;
+    }
+    &.selected {
+      background: #eff6ff;
+    }
+    /* Điểm đã giao: khoá chỉnh sửa, làm nhạt để phân biệt quá khứ / tương lai. */
+    &.locked td {
+      background: #fcfdfe;
+    }
+    &.adhoc {
+      box-shadow: inset 3px 0 0 #db2777;
+    }
+  }
+
+  .tag {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: #fce7f3;
+    color: #9d174d;
+    font-size: 9.5px;
+    font-style: normal;
+    font-weight: 700;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
+
+  .eta {
+    color: var(--brand);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .row-actions {
+    white-space: nowrap;
+    text-align: right;
+
+    button {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      margin-left: 1px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: #fff;
+      font-size: 10px;
+      line-height: 1;
+      color: var(--muted);
+      cursor: pointer;
+
+      &:hover:not(:disabled) {
+        border-color: var(--brand);
+        color: var(--brand);
+      }
+
+      &:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+    }
+  }
+
+  .lock {
+    font-size: 10px;
+    opacity: 0.4;
+  }
+
+  strong {
+    display: block;
+    font-weight: 600;
+  }
+
+  small {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+
+    &.note {
+      color: #b45309;
+    }
+  }
+
+  .late {
+    color: #dc2626;
+    font-weight: 600;
+  }
+  .early {
+    color: #16a34a;
+  }
+}
+
+.seq {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+/* -------------------------------------------------------------- map */
+.map {
+  position: relative;
+  height: 100%;
+  min-width: 0;
+}
+
+.map__badge {
+  position: absolute;
+  z-index: 500;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #fff;
+  font-size: 12px;
+
+  &--error {
+    background: #dc2626;
+  }
+
+  &--pick {
+    background: #db2777;
+  }
+}
+
+/* ----------------------------------------------------------- player */
+.player {
+  position: absolute;
+  z-index: 500;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 30px rgb(15 23 42 / 18%);
+
+  &__play {
+    width: 38px;
+    height: 38px;
+    border: none;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+
+    &:disabled {
+      background: #cbd5e1;
+      cursor: not-allowed;
+    }
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__range {
+    width: 100%;
+    accent-color: var(--brand);
+  }
+
+  &__meta {
+    display: flex;
+    gap: 14px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  &__clock {
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__speed {
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .monitor {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(420px, 1fr);
+  }
+  .panel {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}

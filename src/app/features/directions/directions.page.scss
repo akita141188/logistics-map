@@ -1,0 +1,592 @@
+.directions {
+  display: grid;
+  grid-template-columns: minmax(340px, 400px) 1fr;
+  height: 100%;
+  min-height: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  overflow-y: auto;
+  background: #fff;
+  border-right: 1px solid var(--border);
+
+  &__header {
+    h2 {
+      margin: 0;
+      font-size: 17px;
+    }
+    p {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+  }
+}
+
+/* ---------------------------------------------------------- tìm kiếm */
+.search {
+  position: relative;
+
+  input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 13px;
+    font-family: inherit;
+
+    &:focus {
+      outline: 2px solid var(--brand);
+      outline-offset: -1px;
+    }
+  }
+
+  &__source {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--muted, #64748b);
+  }
+
+  &__spinner {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--brand);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  &__results {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 260px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgb(15 23 42 / 14%);
+
+    button {
+      display: block;
+      width: 100%;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 8px;
+      background: none;
+      text-align: left;
+      cursor: pointer;
+      font-family: inherit;
+
+      &:hover {
+        background: #f1f5f9;
+      }
+
+      strong {
+        display: block;
+        font-size: 13px;
+      }
+      small {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* -------------------------------------------------------- điểm dừng */
+.waypoints {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-2);
+  }
+
+  &__empty {
+    justify-content: center;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  &__badge {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  &__main {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+
+    strong {
+      display: block;
+      font-size: 13px;
+    }
+    small {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 2px;
+
+    button {
+      width: 24px;
+      height: 24px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--muted);
+
+      &:hover:not(:disabled) {
+        border-color: var(--brand);
+        color: var(--brand);
+      }
+      &:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+    }
+  }
+}
+
+.toolbar {
+  display: flex;
+  gap: 6px;
+
+  button {
+    flex: 1;
+    padding: 7px 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+
+    &:hover:not(:disabled) {
+      border-color: var(--brand);
+    }
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  }
+}
+
+/* --------------------------------------------------------- phương tiện */
+.modes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+
+  button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 2px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+
+    span {
+      font-size: 17px;
+    }
+
+    &.on {
+      border-color: var(--brand);
+      background: #eff6ff;
+      font-weight: 600;
+    }
+  }
+}
+
+/* -------------------------------------------------------------- kết quả */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0f172a, #1e3a8a);
+  color: #fff;
+
+  div {
+    display: flex;
+    flex-direction: column;
+  }
+  span {
+    font-size: 11px;
+    opacity: 0.75;
+  }
+  strong {
+    font-size: 16px;
+  }
+
+  &--loading {
+    display: block;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  /* Nguồn ĐỊNH TUYẾN — cố ý nằm ngoài khối gradient để không lẫn với số liệu. */
+  &__source {
+    display: block;
+    margin-top: -4px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+}
+
+.alert {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+
+  strong {
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  &--danger {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+  }
+
+  /* Tuyến vẫn dùng được nhưng có điều phải nói rõ (hồ sơ phương tiện bị hạ cấp,
+     tuyến dài phải ghép nhiều request...). Không dùng màu đỏ để khỏi lẫn với lỗi. */
+  &--warn {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+  }
+}
+
+/* ------------------------------------------------------------- chỉ dẫn */
+.steps {
+  h3 {
+    margin: 4px 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  li {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+
+    &:last-child {
+      border-bottom: none;
+    }
+    &:hover {
+      background: #f8fafc;
+    }
+    &.active {
+      background: #eff6ff;
+      box-shadow: inset 3px 0 0 var(--brand);
+    }
+  }
+
+  &__icon {
+    flex: none;
+    width: 20px;
+    text-align: center;
+    color: var(--brand);
+    font-size: 15px;
+  }
+
+  &__text {
+    strong {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 500;
+    }
+    small {
+      font-size: 11px;
+      color: var(--muted);
+    }
+  }
+}
+
+.map {
+  height: 100%;
+  position: relative;
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .directions {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(420px, 1fr);
+  }
+  .panel {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+/* ==========================================================================
+   BÁM ĐIỂM VÀO TIM ĐƯỜNG
+   ========================================================================== */
+
+.snap {
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.snap__switch {
+  display: flex;
+  gap: 9px;
+  cursor: pointer;
+
+  input {
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  strong {
+    display: block;
+    font-size: 12.5px;
+  }
+
+  small {
+    display: block;
+    margin-top: 2px;
+    font-size: 10.5px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+}
+
+.snap__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--border);
+  font-size: 11px;
+
+  em {
+    font-style: normal;
+    color: #15803d;
+  }
+
+  .link {
+    border: 0;
+    padding: 0;
+    background: none;
+    color: var(--brand);
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+
+    &:disabled {
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.waypoints__snap {
+  color: #0284c7 !important;
+  font-size: 10px !important;
+}
+
+/* ==========================================================================
+   PHƯƠNG ÁN ĐI ĐƯỜNG KHÁC
+   ========================================================================== */
+
+.alts {
+  h3 {
+    margin: 0 0 6px;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+  }
+}
+
+.alts__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: #cbd5e1;
+  }
+
+  &.on {
+    border-color: var(--brand);
+    background: #eff6ff;
+  }
+}
+
+.alts__rank {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.alts__figures {
+  text-align: right;
+
+  strong {
+    display: block;
+    font-size: 12.5px;
+  }
+
+  small {
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+}
+
+.alts__delta {
+  min-width: 92px;
+  text-align: right;
+  font-size: 10.5px;
+  color: #b45309;
+}
+
+/* ============ CÔNG TẮC GIAO THÔNG + NHÃN NGUỒN ĐỊNH TUYẾN ============ */
+
+.traffic {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  cursor: pointer;
+
+  input {
+    grid-row: span 2;
+    accent-color: #2563eb;
+  }
+
+  span {
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+
+  small {
+    font-size: 10.5px;
+    color: var(--muted);
+    line-height: 1.35;
+  }
+}
+
+.summary__source {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+
+  /* Đổi nguồn là thông tin PHẢI đập vào mắt: người dùng chọn bản đồ Google
+     nhưng con số km/phút lại do OSM tính. Để nhạt như ghi chú thường là coi
+     như giấu. */
+  &--switched {
+    color: #b45309;
+    background: #fffbeb;
+    border-left: 3px solid #f59e0b;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+}
+
+.summary__ratio {
+  white-space: nowrap;
+
+  &--high {
+    color: #dc2626;
+    font-weight: 700;
+  }
+}

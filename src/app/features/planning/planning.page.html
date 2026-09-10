@@ -1,0 +1,329 @@
+<div class="plan">
+  <!-- ==================== CỘT TRÁI: ĐƠN HÀNG & ĐỘI XE ==================== -->
+  <aside class="plan__left">
+    <section class="panel">
+      <header class="panel__head">
+        <h2>Đội xe khả dụng</h2>
+        <small>{{ store.availableVehicles().length }}/{{ store.vehicles().length }} xe</small>
+      </header>
+
+      <ul class="fleet">
+        @for (v of store.vehicles(); track v.id) {
+          <li class="fleet__item" [class.off]="!v.available">
+            <label>
+              <input type="checkbox" [checked]="v.available" (change)="store.toggleVehicle(v.id)" />
+              <span class="dot" [style.background]="v.color"></span>
+              <span class="fleet__info">
+                <strong>{{ v.plate }}</strong>
+                <small>{{ v.driverName }} · {{ v.capacityKg }} kg · tối đa {{ v.maxStops }} điểm</small>
+              </span>
+            </label>
+          </li>
+        }
+      </ul>
+
+      <p class="hint hint--tight">
+        Tổng tải trọng khả dụng: <strong>{{ sumCapacity() }} kg</strong>
+        · tổng khối lượng đơn đã chọn: <strong>{{ sumWeight() }} kg</strong>
+        @if (sumWeight() > sumCapacity()) {
+          <span class="warn"> — thiếu tải, sẽ có đơn không xếp được xe</span>
+        }
+      </p>
+    </section>
+
+    <section class="panel panel--flex dms-scroll">
+      <header class="panel__head">
+        <h2>Đơn chờ giao ({{ store.selectedOrders().length }}/{{ store.orders().length }})</h2>
+        <div class="seg">
+          <button type="button" (click)="store.selectAllOrders(true)">Chọn hết</button>
+          <button type="button" (click)="store.selectAllOrders(false)">Bỏ hết</button>
+        </div>
+      </header>
+
+      <ul class="orders dms-scroll">
+        @for (o of store.orders(); track trackOrder($index, o)) {
+          <li
+            class="order"
+            [class.off]="!store.isSelected(o.id)"
+            [class.active]="o.id === store.highlightOrderId()"
+          >
+            <label class="order__pick">
+              <input
+                type="checkbox"
+                [checked]="store.isSelected(o.id)"
+                (change)="store.toggleOrder(o.id)"
+              />
+            </label>
+
+            <div class="order__body" (click)="store.focusOrder(o)">
+              <div class="order__head">
+                <strong>{{ o.customerName }}</strong>
+                @if (o.priority === 'high') {
+                  <span class="tag tag--hot">{{ priorityLabel[o.priority] }}</span>
+                }
+              </div>
+              <div class="order__meta">{{ o.code }} · {{ o.address }}</div>
+              <div class="order__meta">
+                {{ o.weightKg }} kg · khung giờ
+                {{ hourToLabel(o.windowFrom) }}–{{ hourToLabel(o.windowTo) }}
+              </div>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  </aside>
+
+  <!-- ========================= GIỮA: BẢN ĐỒ + TỔNG HỢP ========================= -->
+  <section class="plan__map">
+    <div class="runbar">
+      <button
+        type="button"
+        class="btn btn--primary runbar__run"
+        [disabled]="store.busy()"
+        (click)="store.optimize()"
+      >
+        {{ store.hasPlan() ? 'Lập lại kế hoạch' : 'Tối ưu & phân xe' }}
+      </button>
+
+      <div class="runbar__status" [attr.data-phase]="store.phase()">
+        @if (store.busy()) {
+          <span class="spinner"></span>
+        }
+        <span>{{ phaseLabel[store.phase()] }}</span>
+        @if (store.error()) {
+          <span class="warn">- {{ store.error() }}</span>
+        }
+      </div>
+
+      <!-- Kéo đơn vi phạm tải trọng/số điểm: phải nói RÕ vì sao bị từ chối,
+           nếu không người dùng chỉ thấy "bấm mà không có gì xảy ra". -->
+      @if (store.moveError(); as message) {
+        <div class="move-error" role="alert">
+          <span>{{ message }}</span>
+          <button type="button" (click)="store.dismissMoveError()" aria-label="Đóng">✕</button>
+        </div>
+      }
+
+      @if (store.hasPlan()) {
+        <button type="button" class="btn" (click)="store.reset()">Xoá kế hoạch</button>
+      }
+    </div>
+
+    <div class="plan__map-surface">
+      <dms-map-surface
+        [markers]="store.markers()"
+        [paths]="store.paths()"
+        [focus]="store.focus()"
+        [fitToken]="store.fitToken()"
+        (markerClick)="onMarkerClick($event)"
+      />
+    </div>
+
+    @if (store.hasPlan()) {
+      <div class="summary">
+        <div class="summary__item">
+          <span>Tuyến</span>
+          <strong>{{ store.summary().routes }}</strong>
+          <small>{{ store.summary().assignedOrders }} đơn đã xếp</small>
+        </div>
+        <div class="summary__item">
+          <span>Tổng quãng đường</span>
+          <strong>{{ formatDistance(store.summary().totalDistanceMeters) }}</strong>
+          <small>
+            tiết kiệm {{ percent(store.savingRatio()) }} so với đi lẻ
+          </small>
+        </div>
+        <div class="summary__item">
+          <span>Thời gian chạy</span>
+          <strong>{{ formatDuration(store.summary().totalDurationSeconds) }}</strong>
+          <small>đã tính thời gian đứng giao</small>
+        </div>
+        <div class="summary__item">
+          <span>Chi phí ước tính</span>
+          <strong>{{ money(store.summary().totalCostVnd) }}</strong>
+          <small>theo đơn giá km từng xe</small>
+        </div>
+        <div class="summary__item">
+          <span>Lấp đầy xe</span>
+          <strong>{{ percent(store.summary().averageUtilization) }}</strong>
+          <small>{{ store.summary().totalWeightKg }} kg đã xếp</small>
+        </div>
+        <div class="summary__item" [class.danger]="store.summary().unassignedOrders > 0">
+          <span>Chưa xếp được</span>
+          <strong>{{ store.summary().unassignedOrders }}</strong>
+          <small>đơn còn lại ở kho</small>
+        </div>
+        <div class="summary__item" [class.danger]="store.summary().windowViolations > 0">
+          <span>Lệch khung giờ</span>
+          <strong>{{ store.summary().windowViolations }}</strong>
+          <small>điểm tới ngoài giờ khách hẹn</small>
+        </div>
+        <div class="summary__item">
+          <span>Nguồn số liệu</span>
+          <strong class="src">
+            {{ store.summary().realMatrix ? 'Đường thật' : 'Ước lượng' }}
+          </strong>
+          <small>
+            {{
+              store.summary().realMatrix
+                ? 'ma trận OSRM /table'
+                : 'chim bay ×1.4 — server không phản hồi'
+            }}
+          </small>
+        </div>
+      </div>
+    }
+  </section>
+
+  <!-- ======================== PHẢI: KẾT QUẢ TỪNG TUYẾN ======================== -->
+  <aside class="plan__right">
+    <section class="panel panel--flex dms-scroll">
+      <header class="panel__head">
+        <h2>Kế hoạch tuyến</h2>
+        @if (store.selectedVehicleId()) {
+          <button type="button" class="link" (click)="store.selectVehicle(null)">Xem tất cả</button>
+        }
+      </header>
+
+      @if (!store.hasPlan()) {
+        <p class="hint">
+          Chọn đơn hàng và xe ở cột trái, rồi bấm <strong>Tối ưu &amp; phân xe</strong>.
+          <br /><br />
+          Hệ thống sẽ lấy <strong>ma trận quãng đường thật</strong> giữa mọi cặp điểm
+          (OSRM <code>/table</code>), chạy thuật toán <strong>Clarke-Wright savings</strong>
+          để chia tuyến theo tải trọng, rồi <strong>2-opt</strong> để gỡ các đoạn đường
+          bắt chéo trong từng tuyến.
+        </p>
+      }
+
+      @for (route of store.routes(); track trackRoute($index, route)) {
+        <article
+          class="route"
+          [class.active]="route.vehicle.id === store.selectedVehicleId()"
+          [style.--route-color]="route.vehicle.color"
+        >
+          <header class="route__head" (click)="store.selectVehicle(route.vehicle.id)">
+            <span class="dot" [style.background]="route.vehicle.color"></span>
+            <div class="route__title">
+              <strong>{{ route.vehicle.plate }}</strong>
+              <small>{{ route.vehicle.driverName }}</small>
+            </div>
+            <div class="route__figures">
+              <span>{{ formatDistance(route.distanceMeters) }}</span>
+              <span>{{ route.stops.length }} điểm</span>
+            </div>
+          </header>
+
+          <div class="route__load">
+            <div class="route__load-bar">
+              <div
+                class="route__load-fill"
+                [style.width.%]="route.utilization * 100"
+                [style.background]="route.vehicle.color"
+              ></div>
+            </div>
+            <span>{{ route.loadKg }}/{{ route.vehicle.capacityKg }} kg ({{ percent(route.utilization) }})</span>
+          </div>
+
+          <div class="route__meta">
+            Về kho {{ store.timeLabel(route.backToDepotMs) }} ·
+            {{ formatDuration(route.durationSeconds) }} · {{ money(route.costVnd) }}
+            @if (route.windowViolations) {
+              <span class="warn"> · {{ route.windowViolations }} điểm lệch giờ</span>
+            }
+          </div>
+
+          @if (route.vehicle.id === store.selectedVehicleId()) {
+            <button
+              type="button"
+              class="btn btn--ghost route__optimize"
+              (click)="store.optimizeRoute(route.vehicle.id)"
+            >
+              Sắp lại thứ tự tuyến này (2-opt)
+            </button>
+
+            <ol class="stops">
+              @for (stop of route.stops; track stop.order.id) {
+                <li class="stop" [class.violation]="stop.windowViolation">
+                  <div class="stop__seq">{{ stop.seq }}</div>
+                  <div class="stop__body">
+                    <div class="stop__name">{{ stop.order.customerName }}</div>
+                    <div class="stop__meta">
+                      {{ store.timeLabel(stop.etaMs) }} · {{ stop.order.weightKg }} kg ·
+                      {{ formatDistance(stop.legDistanceMeters) }}
+                      @if (stop.windowViolation === 'late') {
+                        <span class="warn">— tới sau {{ hourToLabel(stop.order.windowTo) }}</span>
+                      }
+                      @if (stop.windowViolation === 'early') {
+                        <span class="warn">— tới trước {{ hourToLabel(stop.order.windowFrom) }}</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="stop__actions">
+                    <button
+                      type="button"
+                      title="Lên trước"
+                      (click)="store.moveWithinRoute(route.vehicle.id, stop.order.id, -1)"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      title="Xuống sau"
+                      (click)="store.moveWithinRoute(route.vehicle.id, stop.order.id, 1)"
+                    >
+                      ↓
+                    </button>
+                    <select
+                      title="Chuyển sang xe khác"
+                      [value]="route.vehicle.id"
+                      (change)="onMoveOrder(stop.order.id, $event)"
+                    >
+                      @for (v of store.availableVehicles(); track v.id) {
+                        <option [value]="v.id">{{ v.plate }}</option>
+                      }
+                      <option value="">— Bỏ khỏi kế hoạch —</option>
+                    </select>
+                  </div>
+                </li>
+              }
+            </ol>
+          }
+        </article>
+      }
+
+      @if (store.unassignedOrders().length) {
+        <article class="route route--unassigned">
+          <header class="route__head">
+            <span class="dot" style="background: #94a3b8"></span>
+            <div class="route__title">
+              <strong>Chưa phân xe</strong>
+              <small>{{ store.unassignedOrders().length }} đơn — thiếu tải trọng hoặc thiếu xe</small>
+            </div>
+          </header>
+
+          <ol class="stops">
+            @for (o of store.unassignedOrders(); track o.id) {
+              <li class="stop">
+                <div class="stop__seq">!</div>
+                <div class="stop__body">
+                  <div class="stop__name">{{ o.customerName }}</div>
+                  <div class="stop__meta">{{ o.code }} · {{ o.weightKg }} kg</div>
+                </div>
+                <div class="stop__actions">
+                  <select value="" (change)="onMoveOrder(o.id, $event)">
+                    <option value="">Xếp vào xe…</option>
+                    @for (v of store.availableVehicles(); track v.id) {
+                      <option [value]="v.id">{{ v.plate }}</option>
+                    }
+                  </select>
+                </div>
+              </li>
+            }
+          </ol>
+        </article>
+      }
+    </section>
+  </aside>
+</div>

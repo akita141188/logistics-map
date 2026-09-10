@@ -1,0 +1,284 @@
+<section class="directions">
+  <!-- ============================ CỘT TRÁI ============================ -->
+  <aside class="panel dms-scroll">
+    <header class="panel__header">
+      <h2>Chỉ đường</h2>
+      <p>Dựng lộ trình nhiều điểm dừng và xem đường đi thật trên phố.</p>
+    </header>
+
+    <!-- Tìm địa chỉ -->
+    <div class="search">
+      <input
+        type="search"
+        placeholder="Tìm địa chỉ, tên cửa hàng…"
+        [value]="store.query()"
+        (input)="onQuery($event)"
+      />
+      @if (store.searchResults.isLoading()) {
+        <span class="search__spinner"></span>
+      }
+
+      @if (searchItems().length) {
+        <ul class="search__results">
+          @for (item of searchItems(); track item.displayName) {
+            <li>
+              <button type="button" (click)="onPickResult(item)">
+                <strong>{{ item.shortName }}</strong>
+                <small>{{ item.displayName }}</small>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+
+      <small class="search__source">Nguồn: {{ store.geocodeProviderLabel() }}</small>
+    </div>
+
+    <button
+      class="btn"
+      type="button"
+      [class.btn--active]="store.pickMode()"
+      (click)="store.togglePickMode()"
+    >
+      {{
+        store.pickMode() ? '● Đang chọn điểm — bấm lên bản đồ' : '＋ Thêm điểm bằng cách bấm bản đồ'
+      }}
+    </button>
+
+    <!-- ==================== BÁM ĐIỂM VÀO TIM ĐƯỜNG ==================== -->
+    <div class="snap">
+      <label class="snap__switch">
+        <input type="checkbox" [checked]="store.snapToRoad()" (change)="store.toggleSnapToRoad()" />
+        <span>
+          <strong>Bám điểm vào tim đường</strong>
+          <small>
+            Bấm lên bản đồ hiếm khi trúng mặt đường. Bật lên thì ghim tự kéo về con đường gần nhất,
+            nên điểm hiển thị và điểm dùng để định tuyến là một.
+          </small>
+        </span>
+      </label>
+
+      <div class="snap__foot">
+        @if (store.snapping()) {
+          <em>Đang bám đường…</em>
+        } @else if (store.totalSnapOffsetMeters() > 0) {
+          <em>
+            Đã nắn tổng cộng
+            <strong>{{ formatDistance(store.totalSnapOffsetMeters()) }}</strong> sai lệch
+          </em>
+        }
+        <button
+          type="button"
+          class="link"
+          [disabled]="store.snapping() || !store.waypoints().length"
+          (click)="store.snapAll()"
+        >
+          Bám lại tất cả điểm
+        </button>
+      </div>
+    </div>
+
+    <!-- Danh sách điểm dừng -->
+    <ol class="waypoints">
+      @for (w of store.waypoints(); track w.id; let i = $index, count = $count) {
+        <li>
+          <span class="waypoints__badge">
+            {{ i === 0 ? 'A' : i === count - 1 ? 'B' : i + 1 }}
+          </span>
+          <button class="waypoints__main" type="button" (click)="focusWaypoint(w)">
+            <strong>{{ w.label }}</strong>
+            <small>{{ waypointRole(i, count) }} · {{ w.address }}</small>
+            @if (w.snapOffsetMeters) {
+              <small class="waypoints__snap">
+                ⤷ đã kéo {{ w.snapOffsetMeters }} m vào
+                {{ w.snapRoadName || 'đường gần nhất' }}
+              </small>
+            }
+          </button>
+          <span class="waypoints__actions">
+            <button type="button" title="Lên" [disabled]="i === 0" (click)="store.move(w.id, -1)">
+              ↑
+            </button>
+            <button
+              type="button"
+              title="Xuống"
+              [disabled]="i === count - 1"
+              (click)="store.move(w.id, 1)"
+            >
+              ↓
+            </button>
+            <button type="button" title="Xoá" (click)="store.removeWaypoint(w.id)">✕</button>
+          </span>
+        </li>
+      } @empty {
+        <li class="waypoints__empty">
+          Chưa có điểm nào. Tìm địa chỉ ở trên hoặc bấm lên bản đồ để thêm.
+        </li>
+      }
+    </ol>
+
+    <div class="toolbar">
+      <button type="button" (click)="store.reverse()" [disabled]="store.waypoints().length < 2">
+        ⇅ Đảo chiều
+      </button>
+      <button type="button" (click)="store.optimize()" [disabled]="store.waypoints().length < 4">
+        ✨ Tối ưu thứ tự
+      </button>
+      <button type="button" (click)="store.clearAll()" [disabled]="!store.waypoints().length">
+        🗑 Xoá hết
+      </button>
+    </div>
+
+    <!-- Phương tiện -->
+    <div class="modes">
+      @for (m of travelModes; track m.value) {
+        <button
+          type="button"
+          [class.on]="store.travelMode() === m.value"
+          (click)="store.setTravelMode(m.value)"
+        >
+          <span>{{ m.icon }}</span> {{ m.label }}
+        </button>
+      }
+    </div>
+
+    <!--
+      CÔNG TẮC TÍNH THEO GIAO THÔNG.
+      Để lộ ra vì nó đổi cả ĐƯỜNG ĐI chứ không chỉ số phút: đo thật trên chặng
+      Ngọc Lâm -> Bà Triệu, tắt = 6,8 km qua cầu Chương Dương, bật = 10,8 km do
+      Google né cầu. Bấm để tự so, thay vì bị một mặc định ẩn quyết định hộ.
+    -->
+    <label class="traffic">
+      <input
+        type="checkbox"
+        [checked]="store.trafficAware()"
+        (change)="store.toggleTrafficAware()"
+      />
+      <span>Tính theo tình trạng giao thông</span>
+      <small>đổi cả quãng đường, không chỉ thời gian · chỉ áp dụng ô tô/xe máy trên Google</small>
+    </label>
+
+    <!-- Tóm tắt kết quả -->
+    @if (store.loading()) {
+      <div class="summary summary--loading">Đang tính lộ trình…</div>
+    } @else if (store.error(); as message) {
+      <div class="alert alert--danger">
+        <strong>Không tính được lộ trình</strong>
+        {{ message }}
+      </div>
+    } @else if (hasRoute()) {
+      <div class="summary">
+        <div>
+          <span>Quãng đường</span>
+          <strong>{{ formatDistance(store.distanceMeters()) }}</strong>
+        </div>
+        <div>
+          <span>Thời gian</span>
+          <strong>{{ formatDuration(store.durationSeconds()) }}</strong>
+        </div>
+        <div>
+          <span>Tới lúc</span>
+          <strong>{{ store.eta() || '—' }}</strong>
+        </div>
+      </div>
+
+      <!--
+        NGUỒN ĐỊNH TUYẾN — không phải nguồn geocode ở ô tìm kiếm phía trên.
+        Có cơ chế dự phòng Google -> OSRM thì thiếu dòng này là không ai biết
+        con số km/phút vừa đọc do bên nào tính, bằng hồ sơ phương tiện nào.
+      -->
+      @if (store.routingSourceLabel(); as source) {
+        <small class="summary__source" [class.summary__source--switched]="store.routingSwitched()">
+          @if (store.routingSwitched()) {
+            <strong>⇄ Đã đổi nguồn:</strong>
+          } @else {
+            Định tuyến:
+          }
+          {{ source }}
+          <!--
+            HỆ SỐ VÒNG — chính con số này là thứ đã thiếu khi màn hình báo tuyến
+            đi bộ 21,7 km mà không ai nghi ngờ gì. Một mình "21,7 km" thì không
+            có gì để đối chiếu; "gấp 4,8 lần đường chim bay" thì nhìn là biết sai.
+          -->
+          @if (store.detourLabel(); as ratio) {
+            <span class="summary__ratio" [class.summary__ratio--high]="store.detourSuspicious()">
+              · vòng {{ ratio }} đường chim bay
+            </span>
+          }
+        </small>
+      }
+      @if (store.routingNote(); as note) {
+        <div class="alert alert--warn">{{ note }}</div>
+      }
+
+      <!-- ================= PHƯƠNG ÁN ĐI ĐƯỜNG KHÁC ================= -->
+      @if (store.alternatives().length > 1) {
+        <div class="alts">
+          <h3>Phương án đi đường ({{ store.alternatives().length }})</h3>
+          @for (alt of store.alternatives(); track $index) {
+            <button
+              type="button"
+              class="alts__item"
+              [class.on]="store.routeIndex() === $index"
+              (click)="store.selectRoute($index)"
+            >
+              <span class="alts__rank">{{
+                $index === 0 ? 'Nhanh nhất' : 'PA ' + ($index + 1)
+              }}</span>
+              <span class="alts__figures">
+                <strong>{{ formatDuration(alt.durationSeconds ?? 0) }}</strong>
+                <small>{{ formatDistance(alt.distanceMeters) }}</small>
+              </span>
+              @if ($index > 0) {
+                <span class="alts__delta">{{ compareToBest(alt) }}</span>
+              }
+            </button>
+          }
+        </div>
+      }
+
+      <a
+        class="btn btn--primary"
+        [href]="store.googleDirectionUrl()"
+        target="_blank"
+        rel="noopener"
+      >
+        Dẫn đường bằng Google Maps
+      </a>
+    }
+
+    <!-- Chỉ dẫn rẽ -->
+    @if (store.steps().length) {
+      <div class="steps">
+        <h3>Chỉ dẫn từng chặng ({{ store.steps().length }})</h3>
+        <ol>
+          @for (step of store.steps(); track $index) {
+            <li
+              [class.active]="store.activeStepIndex() === $index"
+              (click)="store.focusStep($index)"
+            >
+              <span class="steps__icon">{{ stepIcon(step) }}</span>
+              <span class="steps__text">
+                <strong>{{ step.instruction }}</strong>
+                <small>{{ formatDistance(step.distanceMeters) }}</small>
+              </span>
+            </li>
+          }
+        </ol>
+      </div>
+    }
+  </aside>
+
+  <!-- ============================ BẢN ĐỒ ============================ -->
+  <div class="map">
+    <dms-map-surface
+      [markers]="store.markers()"
+      [paths]="store.paths()"
+      [routingPoints]="store.waypoints()"
+      [pickMode]="store.pickMode()"
+      [fitToken]="store.fitToken()"
+      [focus]="store.focus()"
+      (mapClick)="onMapClick($event)"
+    />
+  </div>
+</section>

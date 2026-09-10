@@ -1,0 +1,263 @@
+<section class="nav">
+  <!-- =========================== KHUNG BẢN ĐỒ =========================== -->
+  <div class="nav__map">
+    <dms-map-surface
+      [center]="center()"
+      [zoom]="14"
+      [markers]="store.markers()"
+      [paths]="store.paths()"
+      [circles]="store.circles()"
+      [vehicle]="store.vehicle()"
+      [focus]="store.focus()"
+      [fitToken]="fitToken()"
+      (mapClick)="onMapClick($event)"
+    />
+
+    <!-- ---------------------- BĂNG CHỈ DẪN (đè lên bản đồ) ---------------------- -->
+    @if (store.guidance(); as g) {
+      <div class="banner" [class.banner--now]="g.imminent" [class.banner--off]="store.offRoute()">
+        <div class="banner__icon">{{ maneuverIcon(g.maneuver, g.modifier) }}</div>
+        <div class="banner__text">
+          <strong class="banner__distance">{{ formatDistance(g.distanceToManeuverMeters) }}</strong>
+          <span class="banner__instruction">{{ g.instruction }}</span>
+          @if (g.roadName && g.roadName !== g.instruction) {
+            <small class="banner__road">{{ g.roadName }}</small>
+          }
+          @if (g.nextInstruction) {
+            <small class="banner__next">Sau đó: {{ g.nextInstruction }}</small>
+          }
+        </div>
+      </div>
+    } @else if (store.loadingRoute()) {
+      <div class="banner banner--muted">
+        <div class="banner__icon">⏳</div>
+        <div class="banner__text"><strong>Đang tính đường…</strong></div>
+      </div>
+    }
+
+    @if (store.offRoute()) {
+      <div class="offroute">
+        Đang đi lệch tuyến {{ store.offRouteMeters() }} m — hệ thống đã tự tính lại đường.
+      </div>
+    }
+
+    <!-- ---------------------- THANH TRẠNG THÁI DƯỚI ĐÁY ---------------------- -->
+    <div class="hud">
+      <div class="hud__speed">
+        <strong>{{ store.speedKmh() }}</strong>
+        <small>km/h</small>
+      </div>
+
+      <div class="hud__block">
+        <span class="hud__label">Điểm kế tiếp</span>
+        <strong>{{ store.nextWaypoint()?.label ?? '—' }}</strong>
+        <small>
+          còn {{ formatDistance(store.metersToNextStop()) }} ·
+          {{ formatDuration(store.secondsToNextStop()) }} · tới lúc
+          {{ formatTime(store.etaNextStopIso()) }}
+          @if (store.nextStopDelayMinutes(); as delay) {
+            <b [class.late]="delay > 0">
+              {{ delay > 0 ? '· trễ ' + delay + '′' : '· sớm ' + -delay + '′' }}
+            </b>
+          }
+        </small>
+      </div>
+
+      <div class="hud__block">
+        <span class="hud__label">Hết chuyến</span>
+        <strong>{{ formatTime(store.etaFinishIso()) }}</strong>
+        <small>
+          còn {{ formatDistance(store.metersRemaining()) }} ·
+          {{ formatDuration(store.secondsToFinish()) }}
+        </small>
+      </div>
+
+      <div class="hud__controls">
+        <button type="button" class="btn btn--primary" (click)="store.toggleRun()">
+          {{ store.running() ? '⏸ Tạm dừng' : '▶ Chạy' }}
+        </button>
+
+        <select [value]="store.speed()" (change)="onSpeed($event)" title="Tốc độ mô phỏng">
+          @for (s of speeds; track s) {
+            <option [value]="s">{{ s }}×</option>
+          }
+        </select>
+
+        <button
+          type="button"
+          class="btn"
+          [class.btn--active]="store.follow()"
+          (click)="store.toggleFollow()"
+          title="Bản đồ tự bám theo xe"
+        >
+          🎯
+        </button>
+      </div>
+    </div>
+
+    <div class="progress"><i [style.width.%]="store.progressPercent()"></i></div>
+
+    <!-- ---------------------- THẺ "ĐÃ TỚI NƠI" ---------------------- -->
+    @if (store.arrivedStop(); as stop) {
+      <div class="arrived">
+        <div class="arrived__head">
+          <span class="arrived__badge">Đã tới nơi</span>
+          <strong>{{ stop.customerName }}</strong>
+          <small>{{ stop.address }}</small>
+        </div>
+        <div class="arrived__meta">
+          <span>{{ stop.orderCode }}</span>
+          <span>{{ stop.amount }} ₫</span>
+          <span>Giờ tới: {{ formatTime(store.clock()) }}</span>
+        </div>
+        <div class="arrived__actions">
+          <button type="button" class="btn btn--primary" (click)="store.completeArrivedStop()">
+            ✔ Giao xong, đi tiếp
+          </button>
+          <button type="button" class="btn" (click)="store.skipArrivedStop()">
+            ✖ Không giao được
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (store.finished()) {
+      <div class="arrived arrived--done">
+        <div class="arrived__head">
+          <span class="arrived__badge">Hoàn thành</span>
+          <strong>Đã về kho, kết thúc chuyến</strong>
+        </div>
+        <div class="arrived__actions">
+          <button type="button" class="btn" (click)="store.resetSession()">Chạy lại từ đầu</button>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- =========================== CỘT PHẢI =========================== -->
+  <aside class="side dms-scroll">
+    <header class="side__header">
+      <h2>Dẫn đường tài xế</h2>
+      <p>Chỉ dẫn rẽ theo vị trí thực, tự định tuyến lại khi đi sai, tự nhận biết đã tới nơi.</p>
+    </header>
+
+    <label class="field">
+      <span>Chuyến đang chạy</span>
+      <select [value]="store.tripId()" (change)="onSelectTrip($event)">
+        @for (t of store.trips; track t.id) {
+          <option [value]="t.id">{{ t.code }} — {{ t.driverName }}</option>
+        }
+      </select>
+    </label>
+
+    @if (store.trip(); as trip) {
+      <div class="driver">
+        <div class="driver__avatar">{{ trip.driverName.charAt(0) }}</div>
+        <div class="driver__info">
+          <strong>{{ trip.driverName }}</strong>
+          <span>{{ trip.vehiclePlate }} · {{ trip.driverPhone }}</span>
+          <span class="driver__depot">{{ trip.depot.name }}</span>
+        </div>
+      </div>
+    }
+
+    @if (store.routeError(); as err) {
+      <div class="alert alert--danger">
+        <strong>Không tính được đường</strong>
+        {{ err }}
+      </div>
+    }
+
+    <!-- ------------------- ĐỘ CHÍNH XÁC ĐỊNH VỊ ------------------- -->
+    <div class="accuracy">
+      <div class="accuracy__row">
+        <span>Sai số so với tim đường</span>
+        <b [class.warn]="store.gpsErrorMeters() > 30">{{ store.gpsErrorMeters() }} m</b>
+      </div>
+      <div class="accuracy__row">
+        <span>Số lần định tuyến lại</span>
+        <b>{{ store.rerouteCount() }}</b>
+      </div>
+      <p class="accuracy__hint">
+        Chấm cam là toạ độ thiết bị báo về, xe màu xanh là vị trí sau khi bám đường. Mọi con số
+        km/ETA đều tính trên vị trí đã bám đường — dùng toạ độ thô thì quãng đường bị thổi phồng
+        và chỉ dẫn rẽ nhảy loạn.
+      </p>
+    </div>
+
+    <div class="tools">
+      <button
+        type="button"
+        class="btn"
+        [class.btn--active]="store.detour()"
+        (click)="store.toggleDetour()"
+      >
+        {{ store.detour() ? '⏹ Dừng đi lệch' : '🧪 Giả lập đi sai đường' }}
+      </button>
+      <button type="button" class="btn" (click)="store.reroute()">🔄 Tính lại đường</button>
+      <button type="button" class="btn" (click)="store.resetSession()">↺ Đặt lại</button>
+    </div>
+
+    @if (handoffUrl(); as url) {
+      <a class="btn btn--ghost" [href]="url" target="_blank" rel="noopener">
+        📱 Mở phần đường còn lại trên Google Maps
+      </a>
+    }
+
+    <!-- ------------------- CHỈ DẪN PHÍA TRƯỚC ------------------- -->
+    @if (store.upcomingSteps().length) {
+      <section class="block">
+        <h3>Đường đi phía trước</h3>
+        <ul class="steps">
+          @for (item of store.upcomingSteps(); track $index) {
+            <li>
+              <span class="steps__icon">
+                {{ maneuverIcon(item.step.maneuver, item.step.modifier) }}
+              </span>
+              <span class="steps__text">{{ item.step.instruction }}</span>
+              <span class="steps__dist">{{ formatDistance(item.distanceFromHere) }}</span>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    <!-- ------------------- DANH SÁCH ĐIỂM CÒN LẠI ------------------- -->
+    <section class="block">
+      <h3>Điểm phải ghé ({{ store.waypoints().length }})</h3>
+      <ul class="stops">
+        @for (w of store.waypoints(); track w.stop?.id ?? 'depot') {
+          <li [class.stops--next]="w === store.nextWaypoint()">
+            <span class="stops__seq">{{ w.stop ? w.stop.seq : '🏭' }}</span>
+            <span class="stops__body">
+              <strong>{{ w.label }}</strong>
+              <small>{{ w.sublabel }}</small>
+            </span>
+            @if (w.stop?.plannedArrival) {
+              <span class="stops__time">KH {{ formatTime(w.stop!.plannedArrival) }}</span>
+            }
+          </li>
+        }
+      </ul>
+
+      @if (store.doneStopIds().size) {
+        <p class="stops__done">Đã xử lý xong {{ store.doneStopIds().size }} điểm trong phiên này.</p>
+      }
+    </section>
+
+    <!-- ------------------- NHẬT KÝ ------------------- -->
+    @if (store.log().length) {
+      <section class="block">
+        <h3>Nhật ký hành trình</h3>
+        <ul class="log">
+          @for (item of store.log(); track $index) {
+            <li [class]="'log--' + item.kind">
+              <span class="log__time">{{ formatTime(item.time) }}</span>
+              <span>{{ item.text }}</span>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  </aside>
+</section>

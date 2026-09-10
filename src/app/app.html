@@ -1,0 +1,45 @@
+<header class="topbar">
+  <div class="topbar__brand">
+    <span class="topbar__logo">DMS</span>
+    <div>
+      <strong>Logistics &amp; Bản đồ vận tải</strong>
+      <small>Điều hành · Lập kế hoạch · Giám sát · Dẫn đường · Chỉ đường</small>
+    </div>
+  </div>
+
+  <nav class="topbar__nav">
+    <a routerLink="/fleet" routerLinkActive="active">
+      <span class="topbar__icon">📊</span> Điều hành
+    </a>
+    <a routerLink="/planning" routerLinkActive="active">
+      <span class="topbar__icon">🧮</span> Lập kế hoạch
+    </a>
+    <a routerLink="/delivery" routerLinkActive="active">
+      <span class="topbar__icon">🛰️</span> Giám sát
+    </a>
+    <a routerLink="/navigate" routerLinkActive="active">
+      <span class="topbar__icon">🚚</span> Dẫn đường
+    </a>
+    <a routerLink="/directions" routerLinkActive="active">
+      <span class="topbar__icon">🧭</span> Chỉ đường
+    </a>
+  </nav>
+
+  <div class="topbar__provider">
+    <label>
+      <span>Nhà cung cấp bản đồ</span>
+      <select [value]="mapProvider.provider()" (change)="onChangeProvider($event)">
+        @for (p of providers; track p.value) {
+          <option [value]="p.value">{{ p.label }}</option>
+        }
+      </select>
+    </label>
+    <small [class.warn]="mapProvider.missingKey()">
+      {{ mapProvider.missingKey() ? 'Chưa cấu hình API key — xem README' : currentHint }}
+    </small>
+  </div>
+</header>
+
+<main class="content">
+  <router-outlet />
+</main>

@@ -1,0 +1,462 @@
+/* ==========================================================================
+   BẢNG ĐIỀU HÀNH ĐỘI XE — bố cục 3 cột, chiều cao cố định theo viewport.
+
+   Vì sao dùng `grid` cột cứng thay vì flex co giãn: bản đồ phải chiếm phần lớn
+   nhất và KHÔNG được co lại khi danh sách cảnh báo dài ra. Với flex, một dòng
+   cảnh báo dài là cả bản đồ bị bóp.
+   ========================================================================== */
+
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 340px;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  padding: 12px;
+}
+
+.board__left,
+.board__right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.board__map {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.board__map-surface {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 6px 24px rgb(15 23 42 / 12%);
+}
+
+/* --------------------------------------------------------------------- KPI */
+
+.kpi {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.kpi__item {
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #fff;
+
+  span {
+    display: block;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+  }
+
+  strong {
+    display: block;
+    margin: 2px 0;
+    font-size: 19px;
+    line-height: 1.1;
+
+    &.warn {
+      color: #d97706;
+    }
+  }
+
+  small {
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+
+  &--alert.danger {
+    border-color: #fecaca;
+    background: #fef2f2;
+
+    strong {
+      color: #dc2626;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ panel */
+
+.panel {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+
+  &--flex {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+}
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+
+  h2 {
+    margin: 0;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+}
+
+.link {
+  border: 0;
+  background: none;
+  color: var(--brand);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* Nhóm nút chuyển chế độ (segmented control). */
+.seg {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+
+  button {
+    padding: 4px 9px;
+    border: 0;
+    background: #fff;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+
+    &.active {
+      background: var(--brand);
+      color: #fff;
+      font-weight: 600;
+    }
+  }
+}
+
+/* -------------------------------------------------------------- danh sách xe */
+
+.vehicles {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vehicle {
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    border-color: #cbd5e1;
+    background: var(--surface-2);
+  }
+
+  &.active {
+    border-color: var(--brand);
+    background: #eff6ff;
+  }
+}
+
+.vehicle__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  strong {
+    font-size: 13.5px;
+  }
+}
+
+.vehicle__meta {
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  background: #e2e8f0;
+  color: #475569;
+
+  &[data-status='running'] {
+    background: #dcfce7;
+    color: #15803d;
+  }
+  &[data-status='stopped'] {
+    background: #fef3c7;
+    color: #b45309;
+  }
+  &[data-status='finished'] {
+    background: #e0e7ff;
+    color: #4338ca;
+  }
+}
+
+.vehicle__bar {
+  height: 4px;
+  margin: 8px 0 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.vehicle__bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #38bdf8, #2563eb);
+  transition: width 0.9s linear;
+}
+
+.vehicle__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11px;
+  color: #475569;
+
+  .warn {
+    color: #dc2626;
+    font-weight: 600;
+  }
+}
+
+.vehicle__next {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: #334155;
+}
+
+.vehicle__link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 600;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+/* ------------------------------------------------------------- lớp hiển thị */
+
+.layers {
+  position: absolute;
+  z-index: 600;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+
+  button {
+    padding: 5px 10px;
+    border: 1px solid rgb(15 23 42 / 12%);
+    border-radius: 999px;
+    background: rgb(255 255 255 / 92%);
+    font-size: 11.5px;
+    font-family: inherit;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgb(15 23 42 / 12%);
+
+    &.on {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: #fff;
+      font-weight: 600;
+    }
+  }
+}
+
+/* ---------------------------------------------------------- thanh thời gian */
+
+.timeline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.timeline__clock {
+  text-align: center;
+
+  strong {
+    display: block;
+    font-size: 22px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  small {
+    font-size: 10px;
+    color: var(--muted);
+  }
+}
+
+.timeline__range {
+  width: 100%;
+  accent-color: var(--brand);
+}
+
+.timeline__speeds {
+  display: flex;
+  gap: 4px;
+
+  button {
+    min-width: 34px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    font-size: 11.5px;
+    font-family: inherit;
+    cursor: pointer;
+
+    &.active {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: #fff;
+      font-weight: 600;
+    }
+  }
+}
+
+.timeline__now {
+  font-weight: 600;
+  color: var(--brand);
+}
+
+/* ---------------------------------------------------------------- cảnh báo */
+
+.alerts {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alert {
+  display: flex;
+  gap: 9px;
+  padding: 9px 10px;
+  margin-bottom: 7px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 10px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--surface-2);
+  }
+
+  &[data-severity='high'] {
+    border-left-color: #dc2626;
+    background: #fef2f2;
+  }
+  &[data-severity='medium'] {
+    border-left-color: #f59e0b;
+  }
+  &[data-severity='low'] {
+    border-left-color: #94a3b8;
+  }
+}
+
+.alert__icon {
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.alert__body {
+  min-width: 0;
+}
+
+.alert__title {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.alert__detail {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.alert__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: #94a3b8;
+}
+
+/* --------------------------------------------------------------- màn hẹp */
+
+@media (max-width: 1400px) {
+  .board {
+    grid-template-columns: 290px minmax(0, 1fr) 300px;
+  }
+}
+
+@media (max-width: 1150px) {
+  .board {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: min-content;
+    height: auto;
+    overflow-y: auto;
+  }
+
+  .board__map-surface {
+    height: 60vh;
+  }
+}

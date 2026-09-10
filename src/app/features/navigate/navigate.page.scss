@@ -1,0 +1,523 @@
+.nav {
+  display: grid;
+  grid-template-columns: 1fr minmax(320px, 380px);
+  height: 100%;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------- khung bản đồ */
+.nav__map {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Băng chỉ dẫn — thứ tài xế liếc mắt là phải đọc được ngay. */
+.banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-width: 340px;
+  max-width: min(560px, calc(100% - 28px));
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: rgb(15 23 42 / 92%);
+  color: #fff;
+  box-shadow: 0 10px 30px rgb(15 23 42 / 35%);
+
+  &__icon {
+    font-size: 30px;
+    line-height: 1;
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__distance {
+    font-size: 24px;
+    line-height: 1.15;
+  }
+
+  &__instruction {
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__road,
+  &__next {
+    margin-top: 2px;
+    overflow: hidden;
+    color: #cbd5e1;
+    font-size: 11.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__road {
+    color: #94a3b8;
+  }
+
+  /* Sắp phải rẽ -> đổi màu để nhận ra bằng thị giác ngoại vi, không cần đọc số. */
+  &--now {
+    background: rgb(22 101 52 / 94%);
+  }
+
+  &--off {
+    background: rgb(153 27 27 / 94%);
+  }
+
+  &--muted {
+    background: rgb(71 85 105 / 92%);
+  }
+}
+
+.offroute {
+  position: absolute;
+  top: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 20%);
+}
+
+/* Thanh trạng thái dưới đáy. */
+.hud {
+  position: absolute;
+  right: 14px;
+  bottom: 18px;
+  left: 14px;
+  z-index: 500;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 10px 30px rgb(15 23 42 / 22%);
+
+  &__speed {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 62px;
+    padding-right: 14px;
+    border-right: 1px solid var(--border);
+
+    strong {
+      font-size: 26px;
+      line-height: 1;
+    }
+    small {
+      color: var(--muted);
+      font-size: 11px;
+    }
+  }
+
+  &__block {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+
+    strong {
+      font-size: 14px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    small {
+      color: var(--muted);
+      font-size: 11.5px;
+
+      b {
+        color: #16a34a;
+        font-weight: 600;
+      }
+      b.late {
+        color: #dc2626;
+      }
+    }
+  }
+
+  &__label {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  &__controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    select {
+      padding: 8px 6px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      font-family: inherit;
+      font-size: 12.5px;
+    }
+  }
+}
+
+.progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 500;
+  height: 4px;
+  background: rgb(148 163 184 / 45%);
+
+  i {
+    display: block;
+    height: 100%;
+    background: var(--brand);
+    transition: width 0.4s linear;
+  }
+}
+
+/* Thẻ "đã tới nơi". */
+.arrived {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 600;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(420px, calc(100% - 32px));
+  padding: 18px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgb(15 23 42 / 35%);
+
+  &__head {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    strong {
+      font-size: 16px;
+    }
+    small {
+      color: var(--muted);
+      font-size: 12px;
+    }
+  }
+
+  &__badge {
+    align-self: flex-start;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #166534;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 8px;
+
+    .btn {
+      flex: 1;
+    }
+  }
+
+  &--done &__badge {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+}
+
+/* ---------------------------------------------------------------- cột phải */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  overflow-y: auto;
+  background: #fff;
+  border-left: 1px solid var(--border);
+
+  &__header {
+    h2 {
+      margin: 0;
+      font-size: 17px;
+    }
+    p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+
+  span {
+    color: var(--muted);
+  }
+
+  select {
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+    font-family: inherit;
+    font-size: 13px;
+  }
+}
+
+.driver {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+
+  &__avatar {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    font-weight: 700;
+  }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    color: var(--muted);
+    font-size: 12px;
+
+    strong {
+      color: var(--text);
+      font-size: 14px;
+    }
+  }
+
+  &__depot {
+    color: #7c3aed;
+  }
+}
+
+.alert {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+
+  strong {
+    display: block;
+  }
+
+  &--danger {
+    background: #fef2f2;
+    color: #991b1b;
+  }
+}
+
+.accuracy {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 12px;
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+
+    b.warn {
+      color: #b45309;
+    }
+  }
+
+  &__hint {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.55;
+  }
+}
+
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  .btn {
+    flex: 1 1 auto;
+  }
+}
+
+.block {
+  h3 {
+    margin: 0 0 8px;
+    font-size: 13px;
+  }
+}
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--border);
+    font-size: 12px;
+  }
+
+  &__text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__dist {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.stops {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: 26px 1fr auto;
+    gap: 9px;
+    align-items: center;
+    padding: 8px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    font-size: 12px;
+  }
+
+  &--next {
+    border-color: var(--brand);
+    background: #eff6ff;
+  }
+
+  &__seq {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+
+    small {
+      overflow: hidden;
+      color: var(--muted);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__time {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  &__done {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+}
+
+.log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+
+  li {
+    display: flex;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+
+  &__time {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .log--reroute {
+    color: #b45309;
+  }
+  .log--done {
+    color: #166534;
+  }
+  .log--fail {
+    color: #b91c1c;
+  }
+}
+
+@media (max-width: 1100px) {
+  .nav {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(420px, 1fr) auto;
+  }
+
+  .side {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "_huong_dan": "Copy file nay thanh 'map-keys.json' (cung thu muc) roi dien key. map-keys.json da duoc gitignore. Hoac chay: npm run sync:env",
+  "googleMapsKey": "",
+  "googleMapId": "DEMO_MAP_ID",
+  "vtmapKey": ""
+}

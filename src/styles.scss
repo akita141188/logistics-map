@@ -1,0 +1,270 @@
+/* =========================================================================
+   Style toàn cục.
+
+   Lưu ý: CSS của Leaflet KHÔNG import ở đây mà khai báo trong `angular.json`
+   (`styles: ["node_modules/leaflet/dist/leaflet.css", ...]`) để giữ đúng thứ tự
+   nạp và để tooling tách được thành file riêng.
+   ========================================================================= */
+
+:root {
+  --brand: #2563eb;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    'Helvetica Neue',
+    sans-serif;
+  color: var(--text);
+  background: var(--surface-2);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ================= VÙNG CUỘN KHÔNG LÀM NHẢY LAYOUT =================
+
+   Đặt ở style TOÀN CỤC chứ không trong từng component: `::-webkit-scrollbar` là
+   pseudo-element của chính phần tử cuộn, nhưng view-encapsulation của Angular
+   gắn thêm thuộc tính `_ngcontent-*` vào selector khiến rule dễ trượt khi
+   component được dùng lại ở chỗ khác. Một chỗ khai báo, mọi sidebar dùng chung.
+
+   VẤN ĐỀ ĐANG CHỮA: trên Windows, Chrome/Edge dùng scrollbar "cổ điển" CHIẾM
+   CHỖ THẬT. Nội dung sidebar dài thêm một dòng là scrollbar hiện ra, ăn mất
+   ~15px chiều ngang, chữ và nút bên trong bị ép lại — nhìn như layout tự nhảy.
+
+   BA QUY TẮC:
+   1. `scrollbar-gutter: stable` — chừa sẵn chỗ cho scrollbar NGAY CẢ KHI chưa
+      cần cuộn. Chiều rộng nội dung từ đó không bao giờ đổi.
+   2. Bề rộng scrollbar CỐ ĐỊNH. Tuyệt đối không làm kiểu `width: 0` rồi hover
+      thành `8px` — chính cách đó tái tạo lại đúng cái layout shift cần tránh.
+   3. Chỉ MÀU của thumb đổi khi hover. Màu không chiếm chỗ. */
+.dms-scroll {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+
+  /* Firefox: `thin` giữ bề rộng cố định, `color` trong suốt = thumb ẩn. */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+
+  &:hover {
+    scrollbar-color: rgb(100 116 139 / 55%) transparent;
+  }
+
+  /* Chrome / Edge / Safari */
+  &::-webkit-scrollbar {
+    width: 8px; /* CỐ ĐỊNH — không đổi theo hover */
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 999px;
+    transition: background 0.15s ease;
+  }
+  &:hover::-webkit-scrollbar-thumb {
+    background: rgb(100 116 139 / 55%);
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgb(71 85 105 / 75%);
+  }
+}
+
+/* ---------------------------------------------------------------- nút chung */
+.btn {
+  display: inline-block;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--brand);
+  }
+
+  &--primary {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+    font-weight: 600;
+
+    &:hover {
+      background: #1d4ed8;
+    }
+  }
+
+  &--active {
+    border-color: var(--brand);
+    background: #eff6ff;
+    color: var(--brand);
+    font-weight: 600;
+  }
+
+  &--ghost {
+    background: var(--surface-2);
+    color: var(--brand);
+  }
+}
+
+/* =========================================================================
+   MARKER & POPUP CỦA BẢN ĐỒ
+
+   Phải khai báo ở tầng TOÀN CỤC vì các phần tử này do SDK bản đồ (Leaflet /
+   vtmap-gl) tạo ra bên ngoài cây view của Angular — CSS trong `styles` của
+   component sẽ bị view-encapsulation (`_ngcontent-*`) chặn, không áp được.
+   ========================================================================= */
+
+.dms-pin {
+  display: grid;
+  place-items: center;
+
+  > span {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgb(15 23 42 / 35%);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    transition: transform 0.15s ease;
+  }
+
+  &:hover > span {
+    transform: scale(1.12);
+  }
+
+  &--active > span {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+    border-width: 3px;
+    box-shadow: 0 0 0 4px rgb(37 99 235 / 35%);
+  }
+
+  &--dot > span {
+    width: 10px;
+    height: 10px;
+    border-width: 1px;
+    box-shadow: none;
+  }
+}
+
+/* Xe đang chạy khi tua lại hành trình. */
+.dms-vehicle,
+.dms-vehicle-vt {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--brand);
+  box-shadow: 0 4px 14px rgb(15 23 42 / 30%);
+  font-size: 17px;
+  /* Marker được `setLatLng()` giữ nguyên node DOM, nên transition làm xe trượt
+     mượt giữa 2 lần cập nhật thay vì nhảy cóc. */
+  transition: transform 0.2s linear;
+
+  /* Màu viền theo trạng thái xe, truyền qua biến CSS inline từ component. */
+  > span {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 2px var(--vehicle-color, transparent);
+  }
+}
+
+/* Xe đang được chọn ở bảng điều hành — nhịp đập để tìm ra ngay giữa đám marker. */
+.dms-vehicle--active {
+  border-color: #ef4444;
+  animation: dms-pulse 1.6s ease-out infinite;
+}
+
+@keyframes dms-pulse {
+  0% {
+    box-shadow: 0 4px 14px rgb(15 23 42 / 30%), 0 0 0 0 rgb(239 68 68 / 55%);
+  }
+  70% {
+    box-shadow: 0 4px 14px rgb(15 23 42 / 30%), 0 0 0 14px rgb(239 68 68 / 0%);
+  }
+  100% {
+    box-shadow: 0 4px 14px rgb(15 23 42 / 30%), 0 0 0 0 rgb(239 68 68 / 0%);
+  }
+}
+
+/* Nhãn quãng đường tích luỹ của thước đo. */
+.dms-measure-pin > span {
+  display: inline-block;
+  transform: translate(8px, -50%);
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 35%);
+}
+
+/* Popup của Leaflet. */
+.leaflet-popup-content {
+  margin: 10px 12px;
+  font-size: 12px;
+}
+
+.dms-popup {
+  &__title {
+    margin-bottom: 4px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  &__body {
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  &__link {
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--brand);
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+/* Nền tile của Leaflet khi chưa tải xong — đỡ chớp trắng. */
+.leaflet-container {
+  background: #e8eef3;
+  font-family: inherit;
+}

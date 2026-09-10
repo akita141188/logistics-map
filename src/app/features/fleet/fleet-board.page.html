@@ -1,0 +1,202 @@
+<div class="board">
+  <!-- ======================= CỘT TRÁI: KPI + DANH SÁCH XE ======================= -->
+  <aside class="board__left">
+    <section class="kpi">
+      <div class="kpi__item">
+        <span>Xe đang chạy</span>
+        <strong>{{ store.kpi().running }}/{{ store.kpi().vehicles }}</strong>
+        <small>{{ store.kpi().stopped }} đang dừng · {{ store.kpi().finished }} xong tuyến</small>
+      </div>
+      <div class="kpi__item">
+        <span>Điểm đã giao</span>
+        <strong>{{ store.kpi().deliveredStops }}/{{ store.kpi().totalStops }}</strong>
+        <small>{{ store.kpi().failedStops }} thất bại · {{ store.kpi().lateStops }} trễ</small>
+      </div>
+      <div class="kpi__item">
+        <span>Đúng hạn</span>
+        <strong [class.warn]="store.kpi().onTimeRate < 0.8">
+          {{ percent(store.kpi().onTimeRate) }}
+        </strong>
+        <small>trên số điểm đã xử lý</small>
+      </div>
+      <div class="kpi__item">
+        <span>Quãng đường đội</span>
+        <strong>{{ formatDistance(store.kpi().distanceMeters) }}</strong>
+        <small>cộng từ GPS đã làm sạch</small>
+      </div>
+      <div class="kpi__item">
+        <span>Đã thu</span>
+        <strong>{{ money(store.kpi().collectedAmount) }}</strong>
+        <small>còn {{ money(store.kpi().pendingAmount) }} chưa giao</small>
+      </div>
+      <div class="kpi__item kpi__item--alert" [class.danger]="store.kpi().highAlerts > 0">
+        <span>Cảnh báo nặng</span>
+        <strong>{{ store.kpi().highAlerts }}</strong>
+        <small>tổng {{ store.alerts().length }} cảnh báo</small>
+      </div>
+    </section>
+
+    <section class="panel panel--flex">
+      <header class="panel__head">
+        <h2>Đội xe hôm nay</h2>
+        @if (store.selectedTripId()) {
+          <button type="button" class="link" (click)="store.selectTrip(null)">Bỏ chọn</button>
+        }
+      </header>
+
+      @if (store.loading()) {
+        <p class="hint">Đang tải dữ liệu chuyến và định tuyến lộ trình dự kiến…</p>
+      }
+
+      <ul class="vehicles dms-scroll">
+        @for (v of store.vehicles(); track trackVehicle($index, v)) {
+          <li
+            class="vehicle"
+            [class.active]="v.trip.id === store.selectedTripId()"
+            (click)="store.selectTrip(v.trip.id)"
+          >
+            <div class="vehicle__head">
+              <strong>{{ v.trip.vehiclePlate }}</strong>
+              <span class="badge" [attr.data-status]="v.status">{{ statusLabel[v.status] }}</span>
+            </div>
+
+            <div class="vehicle__meta">
+              {{ v.trip.driverName }} · {{ v.trip.code }}
+            </div>
+
+            <div class="vehicle__bar">
+              <div class="vehicle__bar-fill" [style.width.%]="v.progress * 100"></div>
+            </div>
+
+            <div class="vehicle__stats">
+              <span>{{ v.deliveredCount }}/{{ v.totalStops }} điểm</span>
+              <span>{{ v.speedKmh }} km/h</span>
+              <span [class.warn]="v.deviationMeters > 120">
+                lệch {{ formatDistance(v.deviationMeters) }}
+              </span>
+              <span>pin {{ v.batteryPercent }}%</span>
+            </div>
+
+            @if (v.nextStop) {
+              <div class="vehicle__next">
+                ▸ Kế tiếp: <strong>{{ v.nextStop.customerName }}</strong>
+                (KH {{ formatTime(v.nextStop.plannedArrival) }})
+              </div>
+            } @else {
+              <div class="vehicle__next">▸ Đã xử lý hết điểm giao</div>
+            }
+
+            <a class="vehicle__link" [routerLink]="['/delivery']" [queryParams]="{ trip: v.trip.id }">
+              Mở giám sát chi tiết →
+            </a>
+          </li>
+        }
+      </ul>
+    </section>
+  </aside>
+
+  <!-- ============================ GIỮA: BẢN ĐỒ ============================ -->
+  <section class="board__map">
+    <div class="board__map-surface">
+      <dms-map-surface
+        [markers]="store.markers()"
+        [paths]="store.paths()"
+        [circles]="store.circles()"
+        [vehicles]="store.vehicleMarkers()"
+        [focus]="store.focus()"
+        [fitToken]="store.fitToken()"
+        (markerClick)="onMarkerClick($event)"
+      />
+
+      <div class="layers">
+        <button type="button" [class.on]="store.showPlanned()" (click)="store.togglePlanned()">
+          Lộ trình dự kiến
+        </button>
+        <button type="button" [class.on]="store.showTracks()" (click)="store.toggleTracks()">
+          Vết đã đi
+        </button>
+        <button type="button" [class.on]="store.showGeofence()" (click)="store.toggleGeofence()">
+          Vùng geofence
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== Thanh thời gian: một đồng hồ duy nhất cho cả đội ===== -->
+    <div class="timeline">
+      <div class="timeline__clock">
+        <strong>{{ store.clockLabel() }}</strong>
+        <small>giờ mô phỏng</small>
+      </div>
+
+      <input
+        type="range"
+        class="timeline__range"
+        [min]="store.timeline().start"
+        [max]="store.timeline().end"
+        [value]="store.clockMs()"
+        step="60000"
+        (input)="onSeek($event)"
+      />
+
+      <div class="timeline__speeds">
+        @for (s of speeds; track s) {
+          <button type="button" [class.active]="store.speed() === s" (click)="setSpeed(s)">
+            {{ s === 0 ? '⏸' : s + '×' }}
+          </button>
+        }
+        <button type="button" class="timeline__now" (click)="store.jumpToNow()">Mới nhất</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= PHẢI: DÒNG CẢNH BÁO ========================= -->
+  <aside class="board__right">
+    <section class="panel panel--flex">
+      <header class="panel__head">
+        <h2>Cảnh báo</h2>
+        <div class="seg">
+          <button
+            type="button"
+            [class.active]="store.alertFilter() === 'all'"
+            (click)="store.setAlertFilter('all')"
+          >
+            Tất cả
+          </button>
+          <button
+            type="button"
+            [class.active]="store.alertFilter() === 'high'"
+            (click)="store.setAlertFilter('high')"
+          >
+            Nghiêm trọng
+          </button>
+        </div>
+      </header>
+
+      @if (!store.visibleAlerts().length) {
+        <p class="hint">
+          @if (store.loading()) {
+            Đang phân tích dữ liệu GPS…
+          } @else {
+            Không có cảnh báo nào. Toàn đội đang chạy đúng kế hoạch.
+          }
+        </p>
+      }
+
+      <ul class="alerts dms-scroll">
+        @for (a of store.visibleAlerts(); track trackAlert($index, a)) {
+          <li class="alert" [attr.data-severity]="a.severity" (click)="store.focusAlert(a)">
+            <div class="alert__icon">{{ alertIcon[a.type] }}</div>
+            <div class="alert__body">
+              <div class="alert__title">{{ a.title }}</div>
+              <div class="alert__detail">{{ a.detail }}</div>
+              <div class="alert__foot">
+                <span>{{ a.vehiclePlate }} · {{ a.driverName }}</span>
+                <span>{{ alertLabel[a.type] }}</span>
+              </div>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  </aside>
+</div>
