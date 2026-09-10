@@ -279,10 +279,7 @@ const IMMINENT_METERS = 150;
  * phải vào Trần Duy Hưng" thì băng chỉ dẫn phải hiện "Rẽ phải vào Trần Duy Hưng"
  * kèm số mét còn lại — chứ không phải hiện "đi thẳng".
  */
-export function guidanceAt(
-  offsets: readonly StepOffset[],
-  alongMeters: number,
-): Guidance | null {
+export function guidanceAt(offsets: readonly StepOffset[], alongMeters: number): Guidance | null {
   if (!offsets.length) return null;
 
   let index = offsets.findIndex((o) => alongMeters < o.endMeters);

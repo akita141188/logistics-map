@@ -170,9 +170,7 @@ export class NavigationStore {
     if (!trip) return [];
 
     const done = this._doneStopIds();
-    const remaining = [...trip.stops]
-      .sort((a, b) => a.seq - b.seq)
-      .filter((s) => !done.has(s.id));
+    const remaining = [...trip.stops].sort((a, b) => a.seq - b.seq).filter((s) => !done.has(s.id));
 
     return [
       ...remaining.map((stop) => ({
@@ -533,7 +531,7 @@ export class NavigationStore {
   readonly progressPercent = computed(() => {
     const total = this.routeMeters();
     if (total <= 0) return 0;
-    return Math.min(100, Math.round((this.projection().alongMeters / total) * 100));
+    return Math.min(100, Math.round((this._progressMeters() / total) * 100));
   });
 
   constructor() {
@@ -554,7 +552,11 @@ export class NavigationStore {
       this._lastRoute.set({ tripId: untracked(() => this._tripId()), route: value });
       this._travelled.set(0);
       this._legIndex.set(0);
-      this.lastSegmentIndex = 0;
+      // Tuyến mới -> mọi thứ đo theo tuyến CŨ đều vô nghĩa: tiến độ về 0 và mồi
+      // tìm kiếm hình chiếu về đầu tuyến. Bỏ hai dòng này là xe hiện ở cuối
+      // tuyến mới ngay sau mỗi lần định tuyến lại.
+      this._progressMeters.set(0);
+      this._segmentHint.set(0);
       this._offRoute.set(INITIAL_OFF_ROUTE_STATE);
     });
 
@@ -669,7 +671,8 @@ export class NavigationStore {
     this._legIndex.set(0);
     this._tick.set(0);
     this._offRoute.set(INITIAL_OFF_ROUTE_STATE);
-    this.lastSegmentIndex = 0;
+    this._progressMeters.set(0);
+    this._segmentHint.set(0);
     this._log.set([]);
     this._focusPoint.set(null);
     this._clock.set(new Date().toISOString());
@@ -724,7 +727,14 @@ export class NavigationStore {
     // Lệch tuyến mô phỏng: tăng dần cho tới ~200 m rồi giữ nguyên.
     if (this._detour()) this._drift.update((d) => Math.min(d + 18 * this._speed(), 200));
 
-    const next = updateOffRoute(this._offRoute(), this.projection().lateralMeters, {
+    // Chiếu bản ghi mới xuống tuyến, rồi CHỐT tiến độ theo hướng chỉ tiến.
+    // Thứ tự bắt buộc: đọc `projection()` SAU khi đã tiến vị trí, và ghi mồi
+    // tìm kiếm SAU khi đã đọc — xem `_segmentHint` và `_progressMeters`.
+    const projection = this.projection();
+    this._segmentHint.set(projection.index);
+    this._progressMeters.update((prev) => Math.max(prev, projection.alongMeters));
+
+    const next = updateOffRoute(this._offRoute(), projection.lateralMeters, {
       thresholdMeters: 60,
       confirmFixes: 3,
       clearMeters: 30,
@@ -779,7 +789,15 @@ export class NavigationStore {
 
     if (straight > ARRIVAL_RADIUS_METERS && !passedBoundary) return;
 
-    if (boundary != null) this._travelled.set(boundary);
+    // Kéo xe về đúng mốc chặng — CẢ HAI đại lượng, không được chỉ một.
+    // `_travelled` là "sự thật mô phỏng" dùng để phát bản ghi GPS tiếp theo;
+    // `_progressMeters` là tiến độ mà MÀN HÌNH đang vẽ theo. Snap một cái thôi
+    // thì hệ thống báo "đã tới cửa hàng" trong khi marker xe còn đứng cách đó
+    // vài chục mét, và phần đường xám/xanh cắt sai chỗ.
+    if (boundary != null) {
+      this._travelled.set(boundary);
+      this._progressMeters.update((prev) => Math.max(prev, boundary));
+    }
 
     // Waypoint cuối là kho -> kết thúc chuyến, không có gì để xác nhận giao.
     if (!target.stop) {
@@ -805,25 +823,78 @@ export class NavigationStore {
 
   // ------------------------------------------------------- dữ liệu cho bản đồ
 
+  /**
+   * Ba lớp đường của màn dẫn đường — xem `NAV_ROUTE_COLORS` để biết vì sao là ba.
+   *
+   * Cắt bằng `slicePathByDistance` (theo MÉT) chứ không bằng chỉ số đỉnh: đó là
+   * điều kiện để đường không co giật theo nhiễu GPS. Cả họ lỗi của cách cắt theo
+   * chỉ số được ghi ở đầu hàm `slicePathByDistance`.
+   *
+   * Thứ tự phần tử trong mảng CÓ Ý NGHĨA: layer thêm sau vẽ đè lên layer thêm
+   * trước, nên chặng đang chạy phải nằm cuối để không bị phần "chưa tới" cắt
+   * ngang ở những chỗ tuyến đi qua chính nó (phố một chiều, quay đầu).
+   */
   readonly paths = computed<MapPath[]>(() => {
     const path = this.routePath();
     if (path.length < 2) return [];
 
-    const { index, snapped } = this.projection();
-    const travelled = [...path.slice(0, index + 1), snapped];
-    const ahead = [snapped, ...path.slice(index + 1)];
+    const cum = this.cumulative();
+    const total = cum[cum.length - 1] ?? 0;
+    const along = Math.min(this._progressMeters(), total);
 
-    return [
-      // Phần đã đi lùi xuống nền xám: mắt tài xế chỉ cần nhìn phần phía trước.
-      { key: 'done', points: travelled, color: '#94a3b8', weight: 5, opacity: 0.75 },
-      {
-        key: 'ahead',
-        points: ahead,
-        color: this.offRoute() ? MAP_COLORS.deviation : '#2563eb',
+    // Mốc quãng đường của điểm dừng kế tiếp. Từ đó trở đi là phần CHƯA TỚI.
+    // Không có `legs` (provider không trả) -> coi cả tuyến là chặng đang chạy,
+    // thà thiếu sắc độ còn hơn tô nhạt đúng đoạn tài xế đang cần nhìn.
+    const boundary = this.boundaries()[this.targetIndex() + 1];
+    const activeEnd = Math.min(Math.max(boundary ?? total, along), total);
+
+    const passed = slicePathByDistance(path, cum, 0, along);
+    const active = slicePathByDistance(path, cum, along, activeEnd);
+    const later = slicePathByDistance(path, cum, activeEnd, total);
+
+    const off = this.offRoute();
+    const out: MapPath[] = [];
+
+    if (passed.length > 1) {
+      out.push({
+        key: 'passed',
+        points: passed,
+        color: NAV_ROUTE_COLORS.passed,
+        weight: 5,
+        opacity: 0.55,
+      });
+    }
+
+    if (later.length > 1) {
+      out.push({
+        key: 'later',
+        points: later,
+        color: NAV_ROUTE_COLORS.later,
+        weight: 6,
+        opacity: 0.75,
+      });
+    }
+
+    if (active.length > 1) {
+      // Viền đậm bọc ngoài: thứ làm đường của Google Maps đọc được cả trên ảnh
+      // vệ tinh và nền tối. Cùng hình học, chỉ dày hơn và vẽ trước.
+      out.push({
+        key: 'active-casing',
+        points: active,
+        color: off ? NAV_ROUTE_COLORS.offRouteCasing : NAV_ROUTE_COLORS.activeCasing,
+        weight: 11,
+        opacity: 0.9,
+      });
+      out.push({
+        key: 'active',
+        points: active,
+        color: off ? NAV_ROUTE_COLORS.offRoute : NAV_ROUTE_COLORS.active,
         weight: 7,
-        opacity: 0.95,
-      },
-    ];
+        opacity: 1,
+      });
+    }
+
+    return out;
   });
 
   readonly markers = computed<MapMarker[]>(() => {
@@ -845,7 +916,7 @@ export class NavigationStore {
         color: done.has(stop.id)
           ? MAP_COLORS.done
           : next?.stop?.id === stop.id
-            ? '#2563eb'
+            ? NAV_ROUTE_COLORS.active
             : MAP_COLORS.pending,
         active: next?.stop?.id === stop.id,
       }));
@@ -886,7 +957,7 @@ export class NavigationStore {
       label: '🚚',
       title: this.trip()?.vehiclePlate ?? 'Xe',
       description: `${this.speedKmh()} km/h`,
-      color: this.offRoute() ? MAP_COLORS.deviation : '#2563eb',
+      color: this.offRoute() ? NAV_ROUTE_COLORS.offRoute : NAV_ROUTE_COLORS.active,
     };
   });
 

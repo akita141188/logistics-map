@@ -16,7 +16,7 @@ import {
 } from '../../core/map';
 import { DeliveryMockApi } from '../delivery/delivery-mock.api';
 import { DeliveryStop, DeliveryTrip } from '../delivery/delivery.models';
-import { NavigationStore } from './navigation.store';
+import { NAV_ROUTE_COLORS, NavigationStore } from './navigation.store';
 
 /**
  * ================== KIỂM CHỨNG CHẾ ĐỘ DẪN ĐƯỜNG ==================
@@ -83,12 +83,7 @@ function step(instruction: string, meters: number): RouteStep {
  * Có `legs` (để tính "còn bao xa tới điểm kế tiếp") và `steps` (băng chỉ dẫn).
  */
 const computeRoute = vi.fn(
-  async ({
-    points,
-  }: {
-    points: readonly LatLng[];
-    withSteps?: boolean;
-  }): Promise<RouteResult> => {
+  async ({ points }: { points: readonly LatLng[]; withSteps?: boolean }): Promise<RouteResult> => {
     const distance = totalDistanceMeters(points);
     return {
       path: [...points],
@@ -302,6 +297,130 @@ describe('NavigationStore — tuyến nền không được lẫn giữa hai chu
     await stable();
     expect(store.tripId()).toBe('T1');
     expect(store.routePath().length).toBeGreaterThan(1);
+  });
+});
+
+/**
+ * ============ VẼ TUYẾN THEO KIỂU GOOGLE MAPS (ba sắc độ) ============
+ *
+ * Tuyến test: kho -> S1 (200 m) -> S2 (200 m) -> kho (400 m), tổng 800 m.
+ * Điểm dừng kế tiếp lúc mới bắt đầu là S1, ở mốc 200 m. Vậy:
+ *
+ *   [0 m ... vị trí xe]  = đã đi        -> xám
+ *   [vị trí xe ... 200]  = chặng đang chạy -> xanh đậm + viền
+ *   [200 ... 800]        = CHƯA TỚI     -> xanh nhạt
+ */
+describe('NavigationStore — ba sắc độ đường như Google Maps', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it('chưa chạy: không có phần "đã đi", chặng đang chạy dừng đúng ở điểm dừng kế tiếp', async () => {
+    const store = await setup();
+
+    const paths = store.paths();
+    expect(paths.map((p) => p.key)).toEqual(['later', 'active-casing', 'active']);
+
+    const active = paths.find((p) => p.key === 'active')!;
+    const later = paths.find((p) => p.key === 'later')!;
+
+    // Chặng đang chạy chỉ tới S1, KHÔNG vẽ tiếp tới S2.
+    expect(totalDistanceMeters(active.points)).toBeCloseTo(200, -1);
+    expect(
+      distanceMeters(active.points[active.points.length - 1], store.waypoints()[0].point),
+    ).toBeLessThan(1);
+
+    // Phần chưa tới là toàn bộ phần còn lại, và phải NHẠT hơn chặng đang chạy.
+    expect(totalDistanceMeters(later.points)).toBeCloseTo(600, -1);
+    expect(active.color).toBe(NAV_ROUTE_COLORS.active);
+    expect(later.color).toBe(NAV_ROUTE_COLORS.later);
+    expect(active.weight!).toBeGreaterThan(later.weight!);
+
+    // Hai khúc phải khớp mép, không hở không chồng.
+    expect(distanceMeters(active.points[active.points.length - 1], later.points[0])).toBeLessThan(
+      0.01,
+    );
+  });
+
+  it('chạy rồi: phần đã đi xuất hiện, ba khúc cộng lại vẫn đúng bằng cả tuyến', async () => {
+    const store = await setup();
+
+    store.setSpeed(2);
+    store.start();
+    await stable();
+    await wait(TICK_WAIT_MS);
+    await stable();
+    store.pause();
+
+    const paths = store.paths();
+    const passed = paths.find((p) => p.key === 'passed');
+
+    expect(passed).toBeDefined();
+    expect(passed!.color).toBe(NAV_ROUTE_COLORS.passed);
+
+    const sum = ['passed', 'active', 'later']
+      .map((key) => paths.find((p) => p.key === key))
+      .reduce((acc, p) => acc + (p ? totalDistanceMeters(p.points) : 0), 0);
+
+    expect(sum).toBeCloseTo(store.routeMeters(), -1);
+  });
+
+  it('chặng đang chạy nằm CUỐI mảng để vẽ đè lên phần nhạt', async () => {
+    const store = await setup();
+
+    const keys = store.paths().map((p) => p.key);
+    expect(keys[keys.length - 1]).toBe('active');
+    expect(keys.indexOf('active-casing')).toBeLessThan(keys.indexOf('active'));
+  });
+});
+
+/**
+ * ============ TIẾN ĐỘ CHỈ ĐƯỢC TIẾN, KHÔNG ĐƯỢC LÙI ============
+ *
+ * Vị trí xe được suy ra từ toạ độ GPS THÔ (có nhiễu ±9 m theo mọi hướng, kể cả
+ * hướng dọc đường). Lấy thẳng kết quả chiếu của từng bản ghi thì tiến độ nhảy
+ * tiến-lùi mỗi nhịp, kéo theo: km còn lại nhảy, chỉ dẫn rẽ nhảy, và điểm cắt
+ * giữa các sắc độ đường co giật — đúng hiện tượng "đường vẽ linh tinh".
+ */
+describe('NavigationStore — tiến độ đơn điệu', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it('quãng đường đã đi không bao giờ giảm qua các nhịp GPS', async () => {
+    const store = await setup();
+
+    store.setSpeed(1); // nhích chậm để nhiễu GPS đủ sức đảo chiều nếu không chốt
+    store.start();
+    await stable();
+
+    const samples: number[] = [store.progressMeters()];
+    for (let i = 0; i < 6; i++) {
+      await wait(TICK_WAIT_MS);
+      await stable();
+      samples.push(store.progressMeters());
+    }
+    store.pause();
+
+    for (let i = 1; i < samples.length; i++) {
+      expect(samples[i]).toBeGreaterThanOrEqual(samples[i - 1]);
+    }
+    // Và vẫn phải THẬT SỰ tiến, không phải đứng im.
+    expect(samples[samples.length - 1]).toBeGreaterThan(0);
+  });
+
+  it('phần trăm hành trình và km còn lại đi cùng một chiều với tiến độ', async () => {
+    const store = await setup();
+
+    store.setSpeed(4);
+    store.start();
+    await stable();
+
+    const remainingBefore = store.metersRemaining();
+    const percentBefore = store.progressPercent();
+
+    await wait(TICK_WAIT_MS);
+    await stable();
+    store.pause();
+
+    expect(store.metersRemaining()).toBeLessThanOrEqual(remainingBefore);
+    expect(store.progressPercent()).toBeGreaterThanOrEqual(percentBefore);
   });
 });
 

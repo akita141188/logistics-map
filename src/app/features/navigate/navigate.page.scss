@@ -380,6 +380,47 @@
   }
 }
 
+/**
+ * Ba sắc độ đường — mã màu phải TRÙNG `NAV_ROUTE_COLORS` trong
+ * `navigation.store.ts`. Lệch nhau là chú giải nói một đằng, bản đồ vẽ một nẻo.
+ */
+.legend {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  list-style: none;
+  font-size: 11.5px;
+  color: var(--muted);
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__line {
+    flex: 0 0 26px;
+    height: 5px;
+    border-radius: 3px;
+
+    &--active {
+      height: 7px;
+      background: #1a73e8;
+      box-shadow: 0 0 0 1.5px #0b57d0;
+    }
+    &--later {
+      background: #a8c7fa;
+    }
+    &--passed {
+      background: #9aa0a6;
+      opacity: 0.55;
+    }
+  }
+}
+
 .tools {
   display: flex;
   flex-wrap: wrap;

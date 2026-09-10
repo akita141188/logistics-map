@@ -79,8 +79,11 @@ import { GoogleMapsLoaderService } from './google-maps-loader.service';
         }
 
         @for (circle of circles(); track circle.key) {
-          <map-circle [center]="circle.center" [radius]="circle.radiusMeters"
-                      [options]="circleOptions(circle)" />
+          <map-circle
+            [center]="circle.center"
+            [radius]="circle.radiusMeters"
+            [options]="circleOptions(circle)"
+          />
         }
       </google-map>
     } @else {

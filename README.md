@@ -39,7 +39,7 @@ npm start            # vẫn lệnh cũ, app tự nhận key, mở thẳng Googl
 
 ```bash
 npm run build        # build production (KHÔNG kèm key)
-npm test             # vitest — 180 test / 16 file, phủ cả lõi tính toán lẫn ranh giới giữa các tầng
+npm test             # vitest — 248 test / 20 file, phủ cả lõi tính toán lẫn ranh giới giữa các tầng
 ```
 
 Mở app vào thẳng `/fleet`. Muốn xem phần "giống app dẫn đường nhất" thì vào `/navigate`,
@@ -104,6 +104,8 @@ danh sách tĩnh.
 |---|---|
 | **Băng chỉ dẫn rẽ theo vị trí** | `guidanceAt()` — hiện thao tác sắp phải làm + số mét còn lại, đổi màu khi còn < 150 m |
 | **Vị trí bám tim đường** | GPS thô luôn lệch vài mét; mọi thứ hiển thị đều dùng hình chiếu vuông góc (`projectOnPath`). Chấm cam trên bản đồ là toạ độ thô, để nhìn thấy phần sai số đã bị nắn |
+| **Tiến độ chỉ tiến, không lùi** | Nhiễu GPS có cả thành phần **dọc đường**; lấy thẳng kết quả chiếu từng bản ghi thì km còn lại nhảy tiến-lùi và điểm cắt màu trên tuyến co giật. `_progressMeters` chốt đơn điệu, chỉ đặt lại khi có tuyến mới |
+| **Ba sắc độ đường như Google Maps** | Đã đi (xám mờ) → chặng tới điểm dừng kế tiếp (xanh `#1a73e8`, dày nhất, có viền đậm) → **chưa tới** sau điểm dừng kế tiếp (xanh nhạt `#a8c7fa`). Cắt bằng `slicePathByDistance` theo **mét**, không theo chỉ số đỉnh — xem bẫy #24 |
 | **Tự phát hiện đi sai đường** | Trễ Schmitt + đếm 3 bản ghi liên tiếp (`updateOffRoute`) — một fix nhiễu không được phép làm cả tuyến nhảy |
 | **Tự định tuyến lại** | Tuyến mới đi từ chỗ xe đang đứng qua các điểm **chưa giao** rồi về kho, không chạy lại từ đầu |
 | **Tự nhận biết đã tới nơi** | Vào bán kính 45 m **hoặc** đã đi quá mốc chặng — xe dừng lại chờ tài xế xác nhận giao |
@@ -124,7 +126,7 @@ lần mới. Trong lúc chờ định tuyến lại, `routePath()` rỗng → v�
 Đại Tây Dương) và marker biến mất. Store giữ lại tuyến cũ (`_lastRoute`) làm nền để xe
 đứng yên chờ tuyến mới — đúng hành vi của mọi thiết bị dẫn đường.
 
-Toàn bộ phần lõi nằm ở `core/map/navigation.util.ts`, **thuần tuý và có 21 unit test**
+Toàn bộ phần lõi nằm ở `core/map/navigation.util.ts`, **thuần tuý và có 27 unit test**
 (`navigation.spec.ts`): chiếu vị trí, chỉ dẫn theo quãng đường, mốc chặng, ETA, phát hiện
 lệch tuyến. Bộ phát GPS giả lập nằm riêng trong store — thay bằng WebSocket thật thì không
 phải sửa dòng nào ở phần còn lại.
@@ -463,7 +465,7 @@ docker run -t -i -p 5000:5000 -v "${PWD}:/data" osrm/osrm-backend \
 
 ---
 
-## 6. Mười chín cái bẫy đã được xử lý sẵn trong code
+## 6. Bốn mươi mốt cái bẫy đã được xử lý sẵn trong code
 
 1. **Thứ tự toạ độ** — Leaflet `[lat,lng]`, GeoJSON/OSRM `[lng,lat]`, Google `{lat,lng}`.
    Mỗi kiểu có một type riêng trong `map.types.ts` để trình biên dịch bắt lỗi hộ.
@@ -536,6 +538,97 @@ docker run -t -i -p 5000:5000 -v "${PWD}:/data" osrm/osrm-backend \
 23. **Tham số "tính theo giao thông" đổi cả HÌNH HỌC tuyến, không chỉ ETA** —
     `TRAFFIC_AWARE` làm quãng đường ô tô dài thêm 59% vì nó né đường tắc. Dùng cho ETA lúc
     dẫn đường thì đúng; dùng cho báo cáo km/chi phí thì mỗi lần chạy lại ra một con số.
+24. **`fitBounds(..., { animate: true })` đi vòng qua chốt an toàn của chính Leaflet** — hai
+    chuyến ở hai tỉnh thường có **cùng mức zoom**, nên `setView` đi nhánh *pan* chứ không
+    phải *zoom*. `_tryAnimatedPan` có sẵn chốt "pan quá xa thì đừng animate" (Leaflet issue
+    #2602: *"If we pan too far, Chrome gets issues with tiles and makes them disappear or
+    appear in the wrong place"*), nhưng điều kiện của chốt đó là
+    `(options && options.animate) !== true` — truyền `animate: true` là **tự tay vô hiệu hoá
+    nó**. Kết quả: dời hàng triệu pixel bằng CSS transition, tile không kịp tải, khung nhìn
+    không bao giờ tới đích. Chỉ animate khi khung nhìn mới còn **giao** với khung nhìn hiện tại.
+25. **"Fit khi dữ liệu đổi" và "fit khi người dùng đổi ngữ cảnh" là hai việc khác nhau** —
+    gộp lại thì vừa fit thiếu vừa fit thừa. Thiếu: đổi chuyến là `resource` xoá dữ liệu về
+    `undefined` trước, fit vào lúc đó không có gì để ôm, mà token đã coi như dùng xong.
+    Thừa: màn tua lại đổi hình học mỗi 200 ms, fit theo dữ liệu là khung nhìn giật liên tục
+    và đè lên cả chế độ bám xe. Đúng: **ghi nhớ token, chờ có dữ liệu rồi mới fit, và chỉ
+    một lần cho mỗi token**.
+26. **Một tính năng chỉ tồn tại ở một nhánh provider = tính năng không tồn tại** — `fitToken`
+    và `focus` từng chỉ được nhánh Leaflet thực hiện; Google thì `focus` bị nhồi vào
+    `[center]` (chỉ có tác dụng lúc khởi tạo) và `fitToken` bị bỏ hẳn. Màn hình vẫn truyền
+    input đầy đủ nên nhìn code không thấy gì sai, chỉ người dùng nền Google thấy bản đồ
+    đứng im. Lớp trừu tượng bản đồ tồn tại để ngăn đúng chuyện này, nên **mọi input mới phải
+    đi hết cả ba nhánh, hoặc phải ghi rõ vì sao không**.
+27. **Cắt polyline theo chỉ số đỉnh là sai, phải cắt theo mét** — chỉ số đoạn do
+    `projectOnPath` trả về phụ thuộc nhiễu GPS và mật độ đỉnh của từng nhà cung cấp. Một
+    bản ghi nhiễu là điểm cắt nhảy lùi (đường co giật); mồi tìm kiếm còn sót của tuyến cũ bị
+    kẹp vào `path.length - 2` của tuyến mới là điểm cắt nhảy thẳng tới cuối tuyến (cả tuyến
+    bị tô màu "đã đi", đường xanh biến mất). `slicePathByDistance` cắt theo quãng đường và
+    nội suy hai đầu — điểm cắt là một con số duy nhất, đơn điệu.
+28. **Tiến độ dọc tuyến phải đơn điệu** — nhiễu GPS có cả thành phần **dọc đường**, nên lấy
+    thẳng kết quả chiếu từng bản ghi thì km còn lại nhảy tiến-lùi, và xe đứng chờ đèn đỏ ở
+    khúc vòng có thể bị hệ thống coi là đi lùi rồi phát lại chỉ dẫn đã đi qua.
+29. **Cập nhật tại chỗ thì phải so cả KIỂU VẼ, không chỉ hình học** — `renderPaths` diff theo
+    `key` để không dựng lại SVG mỗi nhịp, nhưng bản đầu chỉ gọi `setLatLngs`. Hệ quả: đổi
+    màu trên một `key` đang tồn tại không bao giờ có tác dụng — đường dẫn đường "chuyển đỏ
+    khi đi lệch tuyến" vẫn xanh, và chọn một xe ở màn lập kế hoạch thì các tuyến khác không
+    mờ đi. Cơ chế báo động bằng màu mà màu không đổi thì tệ hơn là không có.
+30. **Đừng ghi trạng thái trong `computed`** — số lần một `computed` chạy lại do Angular
+    quyết định, nên `this.lastSegmentIndex = result.index` đặt trong thân hàm tính toán làm
+    mồi tìm kiếm tiến lên theo những nhịp không ai kiểm soát được. Trạng thái phải là
+    `signal`, ghi ở nơi có thứ tự rõ ràng (ở đây là `emitFix()`).
+31. **Lấy mẫu polyline theo chỉ số mảng là cắt mất khúc cua** — dịch vụ định tuyến đặt đỉnh
+    **dày ở chỗ cong, thưa ở đoạn thẳng**. Đo trên tuyến demo Hà Nội (Google Routes, 1240 đỉnh
+    / 35,6 km): khoảng cách hai đỉnh liền nhau p50 = 20 m nhưng max = 254 m. `filter(i % 4)`
+    vì thế đẩy đường vẽ ra xa mặt đường tới **105 m** và tạo dây cung **403 m** cắt ngang khu
+    phố. Cách đúng là `resampleAlongPath` — **chỉ thêm đỉnh, không bao giờ bớt**, sai số hình
+    học bằng 0 đúng nghĩa đen. Đo lại sau khi sửa: lệch tối đa **7 m**, dây cung dài nhất **41 m**.
+32. **Đường "đi lệch tuyến" giả lập cũng phải là đường có thật** — nối thẳng từ điểm neo ra một
+    toạ độ lệch rồi vòng về cho ra hai đoạn thẳng ~2 km cắt qua khu dân cư quanh Đại học Thuỷ
+    Lợi rồi đâm ra hồ Đống Đa. Người xem không có cách nào phân biệt "tài xế đi lệch" với
+    "phần mềm vẽ sai". Cùng điểm neo ấy, **định tuyến thật** cho 5.882 m đường phố có thật
+    (đi đúng tuyến chỉ 2.200 m), đỉnh lệch 1.055 m — cảnh báo vẫn kêu, nhưng kêu vì một hành
+    vi lái xe có thật. Định tuyến hỏng thì **bỏ hẳn đoạn đó**, không bịa đường thẳng.
+33. **Nhiễu GPS phải LỆCH NGANG và TỰ TƯƠNG QUAN** — `lat + random()*0.0001` sai hai lần:
+    (a) nhiễu trắng có thành phần **dọc đường**, mà sai số dọc đường thì được **cộng dồn** vào
+    quãng đường thực tế nên luôn thổi phồng số km — con số nhiều doanh nghiệp dùng để khoán
+    xăng; (b) sai số GPS đời thực biến thiên theo đơn vị chục giây, hai lần đo cách nhau 10 giây
+    gần như y hệt nhau, nên vẽ nhiễu trắng lên polyline dày ra một đường răng cưa mà không
+    thiết bị nào bắn về. Xem `applyGpsNoise`.
+34. **Vị trí xe phải nhất quán với trạng thái đơn hàng** — cắt track ở "72% số **đỉnh**" nghe
+    vô hại nhưng 72% số đỉnh = **75,7% quãng đường**, trong khi khách hàng số 6 nằm ở 61,6% và
+    số 7 ở 68,7%. Kết quả: xe đã chạy vượt qua hai khách đang hiện "Chưa tới", vượt 3–5 km.
+    Mốc đúng phải suy từ nghiệp vụ: **giữa điểm xử lý cuối cùng và điểm chưa giao kế tiếp**.
+35. **Giờ giấc gõ tay thì sớm muộn cũng bất khả thi** — bộ seed cũ khai "chậm 41 phút" ở điểm 4
+    và "chậm 18 phút" ở điểm 5, tức là 4,3 km giữa hai điểm phải chạy trong **2 phút (129 km/h
+    giữa nội thành Hà Nội)**, vừa đủ lọt dưới ngưỡng lọc nhiễu 130 km/h. Chỉ khai **nguyên nhân**
+    (đứng bao lâu ở mỗi điểm), còn giờ tới và số phút chậm phải **suy ra** từ thời gian lăn bánh
+    thật của dịch vụ định tuyến.
+36. **Rải thời gian đều theo quãng đường là giết mọi cảnh báo dựa trên tốc độ** — làm thế thì xe
+    chạy đúng một tốc độ suốt chuyến (bộ dữ liệu cũ: **mọi điểm đều ~8 km/h**), nên ngưỡng
+    "vượt 60 km/h" là thứ không bao giờ chạm tới được. Cần một biểu đồ tốc độ có cơ sở vật lý:
+    tốc độ tỉ lệ với **độ thẳng** của tuyến, co giãn lại cho khớp đúng thời gian mà dịch vụ định
+    tuyến trả về. Đo sau khi sửa: p10/p50/p90/max = **8 / 28 / 47 / 56 km/h**.
+37. **Đo độ cong: cả "góc giữa hai đoạn liền kề" lẫn "góc giữa hai dây cung" đều hụt** — cách
+    một cho mọi khúc cua có đỉnh dày thành "thẳng tắp"; cách hai chỉ đo được **một nửa** góc thật,
+    vì dây cung bắc qua cung tròn có hướng bằng tiếp tuyến ở giữa cung (cung 90° trên 320 m,
+    cửa sổ 160 m, chỉ ra 22,5°). Phải **cộng dồn trị tuyệt đối góc bẻ của từng đỉnh** trong cửa
+    sổ — đại lượng này không phụ thuộc mật độ đỉnh.
+38. **Gộp nhiễu lúc đứng yên mà gộp sạch thì xe đỗ hoá thành xe mất sóng** — một xe đỗ 37 phút
+    giao hàng, thiết bị bắn log đều mỗi 90 giây, sau khi lọc còn hai bản ghi cách nhau 37 phút:
+    không phân biệt được với xe tắt máy mất sóng 37 phút. Màn hình bắn cảnh báo *"Mất tín hiệu
+    37 phút — không có dữ liệu từ 08:52 đến 09:29"* trong khi dữ liệu có đủ. `cleanTrack` giờ
+    có `maxStationarySeconds`: đứng yên quá 5 phút thì **giữ lại một bản ghi** làm bằng chứng.
+39. **Tua theo chỉ số mảng thì nhãn "4x" không đo cái gì cả** — thiết bị thật bắn log **dày lúc
+    chạy, thưa lúc đỗ**, nên tua theo chỉ số làm quãng xe đứng một chỗ trôi chậm rề còn quãng xe
+    chạy thì vụt mất — ngược hẳn nhu cầu. Tệ hơn, thay bộ dữ liệu dày gấp bốn là cùng nhãn ấy
+    chạy chậm đi bốn lần. Phải tua theo **đồng hồ chuyến** (`nextCursorByTime`), và luôn nhích
+    tối thiểu một bản ghi để track thiếu `createDate` không làm treo thanh tua.
+40. **So "thực tế nửa chuyến" với "dự kiến cả chuyến" rồi gọi là chênh lệch** — màn hình khoe tài
+    xế tiết kiệm được 12 km trong khi sự thật là anh ta còn 12 km chưa đi. Cùng phép trừ ấy đến
+    cuối ngày lại đúng, nên lỗi rất khó lộ qua ảnh chụp màn hình. Mốc hợp lệ là **phần kế hoạch
+    tương ứng**: chiếu vị trí GPS mới nhất lên lộ trình dự kiến (`plannedSoFarMeters`).
+41. **Trần số marker phải theo số điểm, không theo tỉ lệ cố định** — `i % 4` nghĩa là số node DOM
+    tỉ lệ thuận với độ dày dữ liệu, nên màn hình bắt đầu giật **đúng vào lúc dữ liệu tốt lên**.
 
 ---
 

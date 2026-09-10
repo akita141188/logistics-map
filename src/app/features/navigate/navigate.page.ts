@@ -56,9 +56,21 @@ export class NavigatePage {
     return depot ? { lat: depot.lat, lng: depot.lng } : { lat: 21.0278, lng: 105.8342 };
   });
 
-  /** Fit khung nhìn khi đổi chuyến hoặc khi tuyến vừa được tính lại. */
-  protected readonly fitToken = computed(
-    () => `${this.store.tripId()}-${this.store.rerouteCount()}-${this.store.routePath().length}`,
+  /**
+   * Khi nào được phép fit lại khung nhìn.
+   *
+   * ĐANG BÁM XE thì CHỈ fit lúc đổi chuyến. Token cũ có cả `rerouteCount` và
+   * `routePath().length`, nên mỗi lần định tuyến lại (kể cả tự động khi đi lệch)
+   * bản đồ lại giật ra ôm toàn tuyến rồi bị `flyTo` của chế độ bám xe kéo về —
+   * hai cơ chế khung nhìn đánh nhau, đúng thứ làm màn hình dẫn đường nhảy loạn.
+   *
+   * TẮT BÁM XE thì người xem đang ở vai điều phối, muốn thấy toàn tuyến: lúc đó
+   * mới cho `rerouteCount` vào token để mỗi tuyến mới được fit lại một lần.
+   */
+  protected readonly fitToken = computed(() =>
+    this.store.follow()
+      ? `trip-${this.store.tripId()}`
+      : `route-${this.store.tripId()}-${this.store.rerouteCount()}`,
   );
 
   /** Deep-link mở dẫn đường thật trên điện thoại cho phần đường còn lại. */

@@ -109,6 +109,53 @@ export function pointAtRatio(path: readonly LatLng[], ratio: number): LatLng | n
 }
 
 /**
+ * Làm DÀY một polyline: chèn thêm điểm sao cho không đoạn nào dài quá
+ * `maxSpacingMeters`, nhưng **giữ nguyên 100% đỉnh gốc**.
+ *
+ * ====== VÌ SAO KHÔNG ĐƯỢC LẤY MẪU THEO CHỈ SỐ MẢNG ======
+ *
+ * Cách hay gặp — và sai — là `path.filter((_, i) => i % step === 0)`. Nó coi mọi
+ * đỉnh có giá trị như nhau, trong khi đỉnh của một tuyến đường KHÔNG hề rải đều:
+ * dịch vụ định tuyến đặt đỉnh dày ở chỗ đường cong và thưa ở đoạn thẳng dài.
+ * Đo trên chính tuyến demo Hà Nội (Google Routes, 1240 đỉnh / 35,6 km):
+ * khoảng cách giữa hai đỉnh liền nhau p50 = 20 m nhưng max = 254 m.
+ *
+ * Bỏ 3 trên 4 đỉnh ở khúc cua là cắt thẳng qua khúc cua đó. Cũng trên tuyến ấy,
+ * `step = 4` đẩy đường vẽ ra xa mặt đường tới **105 m**, 33 đỉnh lệch quá 20 m,
+ * và tạo ra một dây cung dài **403 m** cắt ngang khu phố. Trên bản đồ, đó đúng
+ * là hiện tượng "đường xe chạy không bám đường nét đứt".
+ *
+ * Hàm này đi ngược lại: chỉ THÊM, không bao giờ BỚT. Sai số hình học bằng 0 theo
+ * đúng nghĩa đen, vì mọi đỉnh mới đều nằm trên đoạn thẳng nối hai đỉnh cũ. Tham
+ * số `maxSpacingMeters` vì thế không ảnh hưởng tới độ chính xác — nó chỉ quyết
+ * định xe chạy mượt tới đâu khi tua lại hành trình.
+ */
+export function resampleAlongPath(
+  path: readonly LatLng[],
+  maxSpacingMeters: number,
+): LatLng[] {
+  if (path.length < 2 || !(maxSpacingMeters > 0)) return [...path];
+
+  const result: LatLng[] = [path[0]];
+
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1];
+    const b = path[i];
+    const meters = distanceMeters(a, b);
+
+    // `Math.ceil` chứ không `round`: phải BẢO ĐẢM mọi đoạn <= ngưỡng, không phải
+    // trung bình quanh ngưỡng.
+    const pieces = Math.max(1, Math.ceil(meters / maxSpacingMeters));
+
+    // Bắt đầu từ 1 và kết thúc đúng ở `pieces` -> `b` được đưa vào nguyên vẹn
+    // (t = 1 cho lại chính `b`), nên không đỉnh gốc nào bị mất.
+    for (let k = 1; k <= pieces; k++) result.push(interpolate(a, b, k / pieces));
+  }
+
+  return result;
+}
+
+/**
  * Khoảng cách từ điểm `p` tới ĐOẠN THẲNG `a-b` (mét).
  * Dùng để tính "độ lệch tuyến": GPS thực tế cách lộ trình dự kiến bao xa.
  * Xấp xỉ mặt phẳng — sai số không đáng kể ở phạm vi vài km.

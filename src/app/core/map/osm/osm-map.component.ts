@@ -742,16 +742,32 @@ export class OsmMapComponent {
   /**
    * Fit khung nhìn ôm trọn mọi đường + marker đang hiển thị.
    *
-   * ⚠️ `animate` KHÔNG được để `true` vô điều kiện. Leaflet có một cái bẫy im
-   * lặng: `_tryAnimatedZoom()` mở đầu bằng `if (this._animatingZoom) return true`
-   * — tức là một lần `fitBounds` gọi trong lúc animation trước chưa xong sẽ được
-   * báo là "đã xử lý" rồi BỊ BỎ QUA HOÀN TOÀN, không lỗi, không cảnh báo. Đổi
-   * chuyến giao hàng bắn ra 2–3 lần fit cách nhau vài trăm mili-giây (marker về
-   * trước, tuyến định tuyến về sau) nên lần fit ĐÚNG rất dễ là lần bị bỏ.
+   * ⚠️ `animate: true` VÔ ĐIỀU KIỆN LÀ NGUYÊN NHÂN CỦA LỖI "đổi chuyến mà bản đồ
+   * không tới tuyến mới". Đã dựng lại được bằng test, cơ chế như sau:
    *
-   * Vì vậy: nhảy TỨC THÌ khi khung nhìn mới không giao với khung nhìn hiện tại
-   * (đổi chuyến sang tỉnh khác — animation lúc này cũng vô nghĩa vì bay ngang
-   * qua nửa nước), chỉ animate khi hai khung còn chồng nhau.
+   * `fitBounds` -> `setView`. Hai chuyến ở hai tỉnh khác nhau lại thường có
+   * cùng MỨC ZOOM (đều là khung nhìn cỡ một thành phố), nên `setView` thấy
+   * `this._zoom === zoom` và đi nhánh PAN chứ không phải nhánh ZOOM:
+   *
+   * ```js
+   * _tryAnimatedPan(center, options) {
+   *   var offset = this._getCenterOffset(center)._trunc();
+   *   if ((options && options.animate) !== true && !this.getSize().contains(offset))
+   *     return false;          // <-- chốt an toàn, nhưng animate:true đi vòng qua nó
+   *   this.panBy(offset, options);
+   * }
+   * ```
+   *
+   * Chốt an toàn đó tồn tại vì chính Leaflet biết pan quá xa là hỏng (issue
+   * #2602: "If we pan too far, Chrome gets issues with tiles and makes them
+   * disappear or appear in the wrong place"). Hà Nội -> TP.HCM là khoảng dời
+   * hàng triệu pixel; `animate: true` biến nó thành một CSS transition trên
+   * `_mapPane` — tile không kịp tải, khung nhìn không bao giờ tới đích. Người
+   * dùng thấy đúng cái đã báo: bản đồ đứng chỗ cũ / trắng trơn, phải tự đi tìm.
+   *
+   * Vì vậy: chỉ animate khi khung nhìn mới CÒN GIAO với khung nhìn hiện tại
+   * (dời trong cùng thành phố — animation ở đây giúp người xem không mất phương
+   * hướng). Đi xa hơn thì nhảy tức thì, vừa đúng vừa nhanh.
    */
   fitContent(): void {
     if (!this.map) return;

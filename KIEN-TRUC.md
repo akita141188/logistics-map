@@ -3,8 +3,10 @@
 > Tài liệu này trả lời hai câu: **đã làm được những gì** và **code nằm ở đâu, file nào làm việc gì**.
 > Phần hướng dẫn chạy / bảng đo mạng / phân tích cái bẫy nằm ở `README.md`.
 
-Cập nhật: 10/09/2026 — `npm test` **180/180 pass** (16 test file), `npm run build` xanh.
-Đã áp dụng toàn bộ checklist review `.agent/CLAUDE_DMS_MAP_REVIEW_FIX_20260910.md` (17 mục).
+Cập nhật: 10/09/2026 — `npm test` **248/248 pass** (20 test file), `npm run build` xanh.
+Đã áp dụng toàn bộ checklist review `.agent/CLAUDE_DMS_MAP_REVIEW_FIX_20260910.md` (17 mục),
+cộng đợt sửa khung nhìn bản đồ + cách vẽ tuyến dẫn đường (§1.5) và đợt dựng lại toàn bộ
+mô phỏng GPS của màn Giám sát lộ trình (§1.6).
 
 ---
 
@@ -70,27 +72,88 @@ Không phải 5 demo rời rạc, mà là 5 mắt xích của cùng một luồn
 - **Lazy toàn bộ 5 màn** (`loadComponent`), Leaflet ~150 kB không nằm trong bundle khởi động (`app.config.ts` cố ý import sâu, không qua barrel).
 - **Lõi tính toán tách khỏi Angular**: `navigation.util.ts`, `vrp.util.ts`, `gps-quality.util.ts`, `geo.util.ts`, `alerts.util.ts` đều là hàm thuần → test không cần TestBed, chạy trong mili-giây.
 - **Key nạp lúc runtime** qua `public/map-keys.json`, không nhúng lúc build; không có file → chạy OpenStreetMap, không throw.
-- **180 unit test** phủ đúng phần dễ sai: toán học, thuật toán, hành vi store, và **ranh giới giữa các tầng** — nơi mọi lỗi nghiêm trọng của đợt review 10/09 đã lọt qua.
+- **248 unit test** phủ đúng phần dễ sai: toán học, thuật toán, hành vi store, và **ranh giới giữa các tầng** — nơi mọi lỗi nghiêm trọng của đợt review 10/09 đã lọt qua.
+- **Có test chạy Leaflet THẬT** (`osm-map.component.spec.ts`, jsdom): lớp bug khung nhìn không nằm trong logic của mình mà nằm ở chỗ ghép với trạng thái nội bộ của Leaflet — mock đi thì không còn gì để kiểm chứng.
 
 ```
-core/map/navigation.spec.ts        21 test   chiếu vị trí, chỉ dẫn, mốc chặng, ETA, lệch tuyến
+core/map/navigation.spec.ts        27 test   chiếu vị trí, chỉ dẫn, mốc chặng, ETA, lệch tuyến, cắt tuyến theo mét
 core/map/routing-policy.spec.ts    20 test   ép nguồn theo phương tiện, chốt chặn đường vòng
 core/map/routing.facade.spec.ts    17 test   giữ đủ waypoint, cắt request, dự phòng, lỗi
 core/map/vrp.spec.ts               11 test   CVRP: tải trọng, số điểm, 2-opt
-core/map/gps-quality.spec.ts       11 test   lọc nhiễu, gap, điểm dừng
+core/map/gps-quality.spec.ts       12 test   lọc nhiễu, gap, điểm dừng, xe đỗ ≠ mất sóng
 core/map/html-safe.spec.ts         11 test   XSS qua marker/popup, màu CSS, link toạ độ
 core/map/google/…routes.spec.ts     9 test   thân request 4 phương tiện, "không có tuyến"
+core/map/osm/…map.component.spec.ts 7 test   fit khung nhìn khi đổi chuyến, không fit theo nhịp, đổi kiểu vẽ
 core/map/route-optimizer.spec.ts    7 test   thứ tự điểm, chèn rẻ nhất
 core/map/map-provider.spec.ts       6 test   khôi phục provider phải kèm kiểm tra key
 core/map/runtime-keys.spec.ts       5 test   nạp key, thiếu file, JSON hỏng
+features/delivery/…store.spec.ts   22 test   sửa kế hoạch giữa ca, ETA, khớp đường lạc chuyến, khung nhìn đổi chuyến, tua theo đồng hồ chuyến, mốc so sánh km
+features/delivery/track-sim.spec.ts 18 test  độ thẳng ↔ tốc độ, nhiễu lệch ngang & trơn, mốc giờ tới, mẫu lúc đỗ
+features/navigate/…store.spec.ts   14 test   tới nơi, giao xong, định tuyến lại, tuyến nền, ba sắc độ, tiến độ đơn điệu
 features/directions/…store.spec.ts 14 test   đổi phương tiện/nguồn, số liệu cũ, snapAll race
-features/delivery/…store.spec.ts   12 test   sửa kế hoạch giữa ca, ETA, khớp đường lạc chuyến
+features/delivery/…mock.api.spec.ts 13 test  bám phố, không vượt khách chưa giao, không bịa đường khi định tuyến hỏng
 features/delivery/alerts.spec.ts   10 test   6 loại cảnh báo
 features/fleet/fleet.store.spec.ts 10 test   KPI theo đồng hồ, tỉ lệ đúng hẹn
-features/navigate/…store.spec.ts    9 test   tới nơi, giao xong, định tuyến lại, tuyến nền
 features/planning/…store.spec.ts    7 test   kéo đơn: tải trọng, số điểm, không mất đơn
-                                   ── 180 test / 16 file
+core/map/geo.spec.ts                6 test   làm dày polyline: giữ đủ đỉnh gốc, sai số hình học = 0
+                                   ── 248 test / 20 file
 ```
+
+### 1.5 Đợt sửa khung nhìn bản đồ & cách vẽ tuyến dẫn đường
+
+Hai lỗi người dùng báo, cả hai đều đã dựng lại được bằng test trước khi sửa.
+
+**a) Đổi chuyến giao hàng mà bản đồ không tới tuyến mới.** Ba nguyên nhân độc lập cùng cộng vào:
+
+| Nguyên nhân | Chi tiết | Sửa ở |
+|---|---|---|
+| `fitBounds(..., { animate: true })` | Hai chuyến ở hai tỉnh thường có CÙNG mức zoom, nên Leaflet đi nhánh **pan** chứ không phải zoom. `_tryAnimatedPan` có chốt an toàn "pan quá xa thì đừng animate" (Leaflet issue #2602: tile biến mất / lệch chỗ), nhưng `animate: true` đi vòng qua đúng cái chốt đó → dời hàng triệu pixel bằng CSS transition → khung nhìn không bao giờ tới đích | `osm-map.component.ts` — chỉ animate khi khung nhìn mới còn **giao** với khung nhìn hiện tại |
+| Fit rơi vào lúc dữ liệu còn rỗng | `resource` xoá dữ liệu về `undefined` trước khi tải xong; fit lúc đó không có gì để ôm, mà token đã coi như dùng xong → dữ liệu về sau không fit nữa | `osm-map.component.ts` — ghi nhớ token, **chỉ đánh dấu đã dùng khi thật sự fit được** |
+| Google & Viettel **không có** cơ chế fit | `fitToken` bị bỏ hẳn, `focus` bị nhồi vào `[center]` (chỉ có tác dụng lúc khởi tạo) | `google-map.component.ts`, `viettel-map.component.ts` — thực hiện đủ cả `fitToken` và `focus` |
+
+Kèm theo: dữ liệu nhích mỗi nhịp (tua lại, dẫn đường) **không còn** kéo khung nhìn — trước đó `fitContent()` chạy mỗi 200–500 ms, giật khung nhìn và đè lên cả chế độ bám xe.
+
+**b) Đường dẫn đường vẽ linh tinh.** Ba nguyên nhân:
+
+| Nguyên nhân | Chi tiết | Sửa ở |
+|---|---|---|
+| Cắt tuyến theo **chỉ số đỉnh** | `projectOnPath` trả chỉ số đoạn — phụ thuộc nhiễu GPS và mật độ đỉnh. Nhiễu một nhịp là điểm cắt nhảy lùi; mồi còn sót của tuyến cũ bị kẹp vào `path.length - 2` của tuyến mới là điểm cắt nhảy thẳng tới cuối, cả tuyến bị tô màu "đã đi" | `navigation.util.ts` — thêm `slicePathByDistance` cắt theo **mét**, nội suy đúng hai đầu |
+| Tiến độ lấy trực tiếp từ bản ghi GPS | Nhiễu có thành phần **dọc đường**, nên km còn lại và điểm cắt tiến-lùi liên tục | `navigation.store.ts` — `_progressMeters` **chỉ tiến**, đặt lại khi có tuyến mới |
+| Ghi trạng thái trong `computed` | `this.lastSegmentIndex = result.index` nằm trong thân `projection` — số lần `computed` chạy lại do Angular quyết định | `navigation.store.ts` — mồi thành signal, ghi trong `emitFix()` |
+
+Cách vẽ mới theo đúng Google Maps, ba sắc độ trên cùng một tuyến (`NAV_ROUTE_COLORS`): **đã đi** xám mờ → **chặng tới điểm dừng kế tiếp** xanh `#1a73e8` dày nhất có viền đậm `#0b57d0` → **chưa tới** (sau điểm dừng kế tiếp) xanh nhạt `#a8c7fa`. Có chú giải ba sắc độ ngay trên màn hình.
+
+Đợt này còn vá thêm một lỗi chưa ai báo: `renderPaths` cập nhật tại chỗ theo `key` nhưng **chỉ cập nhật toạ độ, không cập nhật kiểu vẽ**. Hệ quả: đường dẫn đường đổi sang đỏ khi đi lệch tuyến thì vẫn xanh, và chọn một xe ở màn lập kế hoạch thì các tuyến khác không mờ đi.
+
+### 1.6 Dựng lại mô phỏng GPS của màn Giám sát lộ trình
+
+Triệu chứng người dùng báo: *"ấn play có nhiều đoạn vẫn không đi đúng đường nét đứt"* và *"đoạn Đại học Thuỷ Lợi kẻ thẳng ra tận hồ Đống Đa"*. Đào ra **sáu** khuyết tật độc lập, tất cả đều nằm ở khâu sinh dữ liệu giả lập chứ không ở khâu vẽ.
+
+| # | Nguyên nhân | Bằng chứng đo được | Sửa ở |
+|---|---|---|---|
+| 1 | Lấy mẫu GPS theo **chỉ số mảng** (`i % step`) | Tuyến HN 1240 đỉnh/35,6 km, khoảng cách hai đỉnh p50 = 20 m nhưng **max 254 m**. `step = 4` đẩy đường ra xa mặt đường **105 m**, tạo dây cung **403 m** | `geo.util.ts` — `resampleAlongPath` **chỉ thêm, không bớt** |
+| 2 | Đoạn đi lệch tuyến **nối thẳng** | Hai đoạn thẳng ~2 km cắt qua khu dân cư Thuỷ Lợi rồi đâm ra hồ Đống Đa | `delivery-mock.api.ts` — `buildDetour` **định tuyến thật** qua chỗ ghé; hỏng thì bỏ hẳn, không bịa |
+| 3 | Nhiễu GPS là **nhiễu trắng** cộng vào lat/lng | Có thành phần dọc đường → cộng dồn vào km thực tế; không tự tương quan → đường răng cưa | `track-sim.util.ts` — `applyGpsNoise` lệch **ngang**, trơn theo quãng đường |
+| 4 | Cắt track ở **72% số đỉnh** | = 75,7% quãng đường, trong khi khách số 6 ở 61,6% và số 7 ở 68,7% → xe đã chạy vượt hai khách "Chưa tới" 3–5 km | `delivery-mock.api.ts` — mốc suy từ **điểm xử lý cuối → điểm chưa giao kế tiếp** |
+| 5 | Giờ tới **gõ tay** (`delayMinutes`) | Điểm 4 chậm 41', điểm 5 chậm 18' ⇒ 4,3 km trong **2 phút = 129 km/h** giữa nội thành | Seed chỉ khai `dwellMinutes`; giờ tới **suy ra** từ `legs[].durationSeconds` thật |
+| 6 | Thời gian rải **đều theo quãng đường** | Mọi điểm đều ~8 km/h ⇒ ngưỡng quá tốc 60 km/h không bao giờ chạm tới | `track-sim.util.ts` — biểu đồ tốc độ theo **độ thẳng** của tuyến |
+
+Kèm theo, ba lỗi lộ ra trong lúc sửa:
+
+- `cleanTrack` gộp nhiễu lúc đứng yên **sạch quá**: xe đỗ 37 phút giao hàng bị `findGaps` kết luận là *"Mất tín hiệu 37 phút"*. Thêm `maxStationarySeconds` để giữ lại bằng chứng thiết bị vẫn báo về.
+- Thanh tua nhảy **theo chỉ số mảng** nhưng dán nhãn "4x". Thiết bị thật bắn log dày lúc chạy / thưa lúc đỗ, nên cách này làm quãng đứng yên trôi chậm rề còn quãng chạy thì vụt mất. Đổi sang tua theo **đồng hồ chuyến** (`nextCursorByTime`, `PLAYBACK_SPEEDS` giờ là bội số thời gian thật).
+- KPI "Chênh lệch" trừ **thực tế nửa chuyến** cho **dự kiến cả chuyến** → khoe tài xế tiết kiệm 12 km. Đổi mốc sang `plannedSoFarMeters` (chiếu vị trí GPS mới nhất lên lộ trình dự kiến), nhãn đổi thành "Đi thừa".
+- Cache của `DeliveryMockApi` khoá theo `tripId` trong khi lộ trình dự kiến tính lại theo provider → đổi nhà cung cấp bản đồ là hai đường lệch nhau. Khoá giờ có cả provider.
+
+**Đo lại trên tuyến thật (Google Routes, chuyến Nguyễn Văn Toàn):**
+
+| | Trước | Sau |
+|---|---|---|
+| Lệch mặt đường (đoạn đi đúng tuyến) | tới 105 m | **7 m** |
+| Dây cung dài nhất giữa 2 điểm GPS | 403 m | **41 m** |
+| Khoảng cách tới khách "Chưa tới" gần nhất | xe đã chạy vượt qua | **2.092 m / 2.599 m** (chưa tới) |
+| Tốc độ p10/p50/p90/max | ~8 / 8 / 8 / 27 km/h | **8 / 28 / 47 / 56 km/h** |
+| Đoạn đi lệch | 2 đoạn thẳng qua nhà dân | **1 khúc liền, đỉnh lệch 1.055 m, trên phố thật** |
 
 ---
 
@@ -131,7 +194,7 @@ nhà cung cấp bản đồ không phải sửa một dòng nào trong `features
 | `map-routing.config.ts` | 185 | Toàn bộ cấu hình runtime gom vào 1 `InjectionToken`: endpoint, giới hạn đo được của OSRM, ngưỡng nghiệp vụ (geofence, quá tốc độ, dừng đỗ) |
 | `runtime-keys.ts` | 64 | Nạp API key lúc chạy từ `public/map-keys.json` |
 | `map-provider.service.ts` | 118 | Provider đang chọn + nhớ lựa chọn, dùng chung mọi màn. `restore()` **kiểm tra key trước khi khôi phục** — không mắc kẹt ở provider thiếu key |
-| `map-surface.component.ts` | 113 | `<dms-map-surface>` — mặt bàn vẽ duy nhất, `@switch` sang 1 trong 3 nhánh |
+| `map-surface.component.ts` | 126 | `<dms-map-surface>` — mặt bàn vẽ duy nhất, `@switch` sang 1 trong 3 nhánh. `fitToken`/`focus` được **cả ba nhánh** thực hiện (trước đây chỉ Leaflet) |
 | `routing.facade.ts` | 423 | **Cửa duy nhất** để lấy đường đi / ma trận / snap / map-match. Màn hình không được gọi thẳng service provider. Chứa chính sách chọn nguồn 3 tầng: ép nguồn theo phương tiện → dự phòng khi hỏng → đối chiếu khi tuyến vòng phi lý |
 | `routing-capability.ts` | 150 | **Bảng năng lực từng nguồn theo từng phương tiện**, dựng từ số đo thật kèm bằng chứng. Nơi ghi lại vì sao đi bộ/xe đạp không dùng Google ở Việt Nam, và chốt chặn hệ số vòng |
 | `routing.error.ts` | 40 | `RoutingError` + mã lỗi (`NO_ROUTE`, `UNSUPPORTED_MODE`, `TOO_MANY_WAYPOINTS`…) — thay cho thói quen trả route giả 0 m |
@@ -142,9 +205,9 @@ nhà cung cấp bản đồ không phải sửa một dòng nào trong `features
 
 | File | Dòng | Nội dung |
 |---|---|---|
-| `geo.util.ts` | 294 | Haversine, phương vị, nội suy, `pointAtRatio`, `distanceToPathMeters`, chuẩn hoá/gộp/tỉa điểm, format km-phút-giờ, deep-link Google Maps |
-| `navigation.util.ts` | 472 | `projectOnPath`, `cumulativeAlong`, `pointAtAlong`, `bearingAtAlong`, `stepOffsets`, `guidanceAt`, `maneuverIcon` (hiểu cả mã OSRM lẫn mã Google), `legBoundaries`, `activeLegIndex`, `etaSeconds`, `updateOffRoute` |
-| `gps-quality.util.ts` | 325 | `cleanTrack`, `findGaps`, `speedProfileKmh`, `detectStops`, `summarizeTrack` |
+| `geo.util.ts` | 341 | Haversine, phương vị, nội suy, `pointAtRatio`, `distanceToPathMeters`, **`resampleAlongPath`** (làm dày polyline mà giữ nguyên 100% đỉnh gốc), chuẩn hoá/gộp/tỉa điểm, format km-phút-giờ, deep-link Google Maps |
+| `navigation.util.ts` | 522 | `projectOnPath`, `cumulativeAlong`, `pointAtAlong`, `bearingAtAlong`, **`slicePathByDistance`** (cắt khúc tuyến theo mét — nền của cách vẽ 3 sắc độ), `stepOffsets`, `guidanceAt`, `maneuverIcon` (hiểu cả mã OSRM lẫn mã Google), `legBoundaries`, `activeLegIndex`, `etaSeconds`, `updateOffRoute` |
+| `gps-quality.util.ts` | 345 | `cleanTrack` (có `maxStationarySeconds` để xe đỗ không bị hiểu nhầm thành mất sóng), `findGaps`, `speedProfileKmh`, `detectStops`, `summarizeTrack` |
 | `vrp.util.ts` | 348 | `solveCvrp` (Clarke-Wright + 2-opt), `routeCost`. Chú thích ngay trên `VrpStop` ghi rõ phạm vi ràng buộc: **không** enforce khung giờ |
 | `html-safe.util.ts` | 86 | `escapeHtml`, `safeColor` (whitelist cú pháp màu), `safeGeoLink` (dựng URL từ số đã kiểm miền) — mọi chuỗi ghép vào HTML của Leaflet/Viettel đều đi qua đây |
 | `route-optimizer.util.ts` | 169 | `optimizeWaypointOrder`, `bestInsertion`, `insertionCostMeters` |
@@ -155,7 +218,8 @@ nhà cung cấp bản đồ không phải sửa một dòng nào trong `features
 
 | File | Dòng | Vai trò |
 |---|---|---|
-| `osm-map.component.ts` | 704 | Bọc Leaflet: marker, đường, vòng geofence, nhiều xe cùng lúc, chế độ cắm điểm, fit bounds, bay tới điểm. Mọi popup/divIcon dựng qua `html-safe.util` |
+| `osm-map.component.ts` | 795 | Bọc Leaflet: marker, đường, vòng geofence, nhiều xe cùng lúc, chế độ cắm điểm, fit bounds, bay tới điểm. Mọi popup/divIcon dựng qua `html-safe.util`. Fit **một lần cho mỗi `fitToken`, chờ tới khi có dữ liệu**, và không animate khi phải dời xa (bẫy #24) |
+| `osm-map.component.spec.ts` | 212 | Chạy **Leaflet thật** trong jsdom: đổi chuyến phải fit tới tuyến mới, dữ liệu nhích không được dời khung nhìn, đổi màu đường phải có tác dụng (7 test) |
 | `osrm-routing.service.ts` | 267 | `/route/v1` — đường đi, chặng, chỉ dẫn rẽ, phương án thay thế, chọn endpoint theo phương tiện (`routed-foot` / `routed-bike` / car), gắn nhãn nguồn thật |
 | `osrm-matrix.service.ts` | 186 | `/table` — ma trận chi phí, tự cắt lô khi vượt 25 điểm |
 | `osrm-match.service.ts` | 248 | `/match` — khớp GPS vào đường, tự cắt cửa sổ 10 điểm chồng mép rồi khâu lại |
@@ -168,7 +232,7 @@ nhà cung cấp bản đồ không phải sửa một dòng nào trong `features
 | File | Dòng | Vai trò |
 |---|---|---|
 | `google-maps-loader.service.ts` | 60 | Nạp JS SDK một lần duy nhất, dùng chung mọi màn |
-| `google-map.component.ts` | 240 | Bọc `@angular/google-maps`: advanced marker, polyline, `<map-circle>` cho geofence |
+| `google-map.component.ts` | 306 | Bọc `@angular/google-maps`: marker, polyline, `<map-circle>` cho geofence, và **fit bounds + bay tới điểm** (`fitToken`/`focus`) |
 | `google-routes.service.ts` | 278 | Routes API v2 (`computeRoutes`) — có chỉ dẫn rẽ do Google dịch sẵn. `routes: []` → ném `RoutingError`, **không** còn nhánh dựng route giả |
 | `google-matrix.service.ts` | 146 | `computeRouteMatrix` — ma trận thật cho màn lập kế hoạch |
 | `google-geocode.service.ts` | 125 | Geocoding API |
@@ -182,7 +246,7 @@ nhà cung cấp bản đồ không phải sửa một dòng nào trong `features
 | `viettel-map.service.ts` | 388 | Vòng đời map, source/layer, marker, fit bounds |
 | `viettel-route.service.ts` | 331 | Bọc `RoadDrawerControl` — SDK Viettel chỉ vẽ lên map và ghi text vào DOM, không trả JSON, nên số liệu vẫn phải lấy từ OSRM |
 | `road-marker.renderer.ts` | 220 | Marker đánh số theo thứ tự ghé; popup GPS dựng qua `html-safe.util` |
-| `viettel-map.component.ts` | 218 | Nhánh `<dms-map-surface>` cho Viettel; `setHTML()` chỉ nhận chuỗi đã escape |
+| `viettel-map.component.ts` | 264 | Nhánh `<dms-map-surface>` cho Viettel; `setHTML()` chỉ nhận chuỗi đã escape; có **fit bounds + bay tới điểm** (`fitToken`/`focus`) |
 
 ### 2.3 `features/` — 5 màn nghiệp vụ
 
@@ -203,7 +267,7 @@ features/
 ├── planning/                    LẬP KẾ HOẠCH & PHÂN XE — /planning
 │   ├── planning.models.ts    99  đơn hàng, xe, kho, tuyến đã hoạch định
 │   ├── planning-mock.api.ts 368  sinh 30 đơn + 4 xe quanh Hà Nội
-│   ├── planning.store.ts    702  3 pha tách rời: ma trận → chia tuyến → vẽ đường.
+│   ├── planning.store.ts    713  3 pha tách rời: ma trận → chia tuyến → vẽ đường.
 │   │                             Kéo đơn giữa 2 xe chỉ chạy lại pha 2 → phản hồi tức thì.
 │   │                             `rejectionFor()` chạy TRƯỚC mọi thao tác ghi → kéo đơn
 │   │                             vượt tải/vượt số điểm bị từ chối, không mất đơn nửa chừng
@@ -211,28 +275,41 @@ features/
 │   └── planning.page.*       91/329/583
 │
 ├── navigate/                    DẪN ĐƯỜNG TÀI XẾ — /navigate
-│   ├── navigation.store.ts  858  vị trí bám tim đường, băng chỉ dẫn rẽ theo vị trí thật,
+│   ├── navigation.store.ts 1004  vị trí bám tim đường, băng chỉ dẫn rẽ theo vị trí thật,
 │   │                             tự phát hiện đi sai đường → tự định tuyến lại từ chỗ
 │   │                             đang đứng, tự nhận biết đã tới nơi và DỪNG chờ xác nhận,
 │   │                             ETA điểm kế tiếp / giờ về kho, nhật ký hành trình.
 │   │                             `_lastRoute` gắn `tripId` → giữ khi định tuyến lại CÙNG
-│   │                             chuyến, bỏ khi đổi hẳn chuyến
-│   ├── navigation.store.spec.ts 309  (9 test)
-│   └── navigate.page.*       85/263/523
+│   │                             chuyến, bỏ khi đổi hẳn chuyến.
+│   │                             `_progressMeters` chỉ tiến; `NAV_ROUTE_COLORS` + cắt tuyến
+│   │                             theo mét → 3 sắc độ đường đúng kiểu Google Maps
+│   ├── navigation.store.spec.ts 432  (14 test)
+│   └── navigate.page.*       97/270/564
 │
 ├── delivery/                    GIÁM SÁT LỘ TRÌNH — /delivery
-│   ├── delivery.models.ts   129  chuyến, điểm giao, kho, ETA, tác động khi sửa kế hoạch
-│   ├── delivery-mock.api.ts 479  sinh chuyến + vệt GPS có nhiễu, có khoảng mất tín hiệu
+│   ├── delivery.models.ts   135  chuyến, điểm giao, kho, ETA, tác động khi sửa kế hoạch
+│   ├── track-sim.util.ts    343  HÀM THUẦN mô phỏng GPS log: biểu đồ tốc độ theo độ thẳng
+│   │                             của tuyến, nhiễu lệch NGANG & tự tương quan, mốc thời
+│   │                             gian neo vào từng điểm giao, mẫu lúc xe đỗ giao hàng
+│   ├── track-sim.spec.ts    266  (18 test)
+│   ├── delivery-mock.api.ts 758  sinh chuyến từ chính lộ trình định tuyến thật: vị trí xe
+│   │                             suy từ trạng thái đơn, đoạn đi lệch tuyến ĐƯỢC ĐỊNH TUYẾN
+│   │                             thật, giờ tới suy từ `legs[].durationSeconds`. Cache khoá
+│   │                             theo `tripId + provider`
+│   ├── delivery-mock.api.spec.ts 332  (13 test) — khoá 3 ràng buộc: bám phố, không vượt
+│   │                             khách "Chưa tới", không bịa hình học khi định tuyến hỏng
 │   ├── alerts.util.ts       386  6 loại cảnh báo + ngưỡng cấu hình được
 │   ├── alerts.spec.ts       223  (10 test)
-│   ├── delivery-monitor.store.ts 1336  màn lớn nhất: phát lại vệt GPS, so tuyến dự kiến /
-│   │                             thực tế / đã khớp đường, chấm điểm chất lượng GPS,
-│   │                             điểm dừng, geofence xác minh giao hàng, chèn đơn phát
-│   │                             sinh giữa ca (tìm chỗ chèn rẻ nhất) + xem ETA lan truyền.
-│   │                             Khớp đường có "vé" `tripId` → kết quả về muộn của chuyến
-│   │                             cũ không đắp sang chuyến đang xem
-│   ├── delivery-monitor.store.spec.ts 366  (12 test)
-│   └── delivery-monitor.page.* 198/578/905
+│   ├── delivery-monitor.store.ts 1435  màn lớn nhất: phát lại vệt GPS theo ĐỒNG HỒ CHUYẾN
+│   │                             (`nextCursorByTime`), so tuyến dự kiến / thực tế / đã khớp
+│   │                             đường, chấm điểm chất lượng GPS, điểm dừng, geofence xác
+│   │                             minh giao hàng, chèn đơn phát sinh giữa ca (tìm chỗ chèn
+│   │                             rẻ nhất) + xem ETA lan truyền. Khớp đường có "vé" `tripId`
+│   │                             → kết quả về muộn của chuyến cũ không đắp sang chuyến đang
+│   │                             xem. Đổi chuyến còn xoá `focus`. KPI "Đi thừa" so với
+│   │                             `plannedSoFarMeters`, không so với cả tuyến
+│   ├── delivery-monitor.store.spec.ts 616  (22 test)
+│   └── delivery-monitor.page.* 198/586/905
 │
 └── directions/                  CHỈ ĐƯỜNG — /directions
     ├── directions.store.ts  551  nhiều điểm dừng, 4 phương tiện, phương án thay thế,
@@ -277,7 +354,7 @@ features/
 npm install
 npm start          # http://localhost:4200 — không cần API key, mặc định OpenStreetMap
 npm run sync:env   # đọc .env của dms.webapp → sinh public/map-keys.json
-npm test           # vitest — 180 test
+npm test           # vitest — 201 test
 npm run build      # build production (KHÔNG kèm key)
 ```
 

@@ -24,6 +24,7 @@ import {
   distanceToPathMeters,
   formatTimeLabel,
   optimizeWaypointOrder,
+  projectOnPath,
   summarizeTrack,
   totalDistanceMeters,
 } from '../../core/map';
@@ -39,12 +40,62 @@ import {
   TripStats,
 } from './delivery.models';
 
-/** Tốc độ tua lại hành trình. */
-export const PLAYBACK_SPEEDS = [1, 2, 4, 8, 16] as const;
+/**
+ * Tốc độ tua lại hành trình — BỘI SỐ CỦA THỜI GIAN THẬT. `240` = một phút xem
+ * bằng bốn giờ chạy xe.
+ *
+ * ====== VÌ SAO KHÔNG CÒN LÀ 1× / 2× / 4× ======
+ *
+ * Bản cũ nhảy `speed` PHẦN TỬ MẢNG mỗi nhịp, rồi dán nhãn "4x" lên đó. Con số ấy
+ * không đo cái gì cả: mật độ điểm GPS đổi thì tốc độ tua đổi theo, cùng một "4x"
+ * có thể là 20× hay 400× thời gian thật. Tệ hơn, thiết bị thật bắn log dày lúc
+ * chạy và thưa lúc đỗ, nên tua theo chỉ số làm đoạn xe ĐỖ trôi qua chậm rề còn
+ * đoạn xe CHẠY thì vụt mất — ngược hẳn với cái người điều vận cần nhìn.
+ *
+ * Tua theo ĐỒNG HỒ CHUYẾN thì nhãn "240x" là một lời hứa kiểm chứng được, và
+ * quãng xe đứng một chỗ 37 phút hiện ra đúng như nó vốn là: xe đứng một chỗ.
+ */
+export const PLAYBACK_SPEEDS = [60, 120, 240, 480, 960] as const;
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
 
 /** Nhịp cập nhật vị trí xe khi tua (ms). */
 const TICK_MS = 220;
+
+/** Trần số chấm GPS vẽ lên bản đồ cùng lúc — xem chỗ dùng ở `markers`. */
+const MAX_GPS_DOTS = 140;
+
+/** Mốc thời gian của một bản ghi GPS (ms). `NaN` khi thiếu/hỏng — người gọi phải lường trước. */
+function msOf(point: { createDate?: string | null } | undefined): number {
+  return point?.createDate ? Date.parse(point.createDate) : Number.NaN;
+}
+
+/**
+ * Vị trí con trỏ tua sau khi đồng hồ CHUYẾN nhích thêm `advanceMs`.
+ *
+ * Tách ra thành hàm thuần để kiểm chứng được: đây là toàn bộ phần "khó đúng" của
+ * thanh tua, còn `setInterval` chỉ là cái vỏ.
+ *
+ * Hai bảo đảm:
+ *  - Bước theo THỜI GIAN: mật độ điểm GPS đổi thì tốc độ tua không đổi.
+ *  - Luôn tiến ít nhất một điểm. Track thiếu `createDate` (thiết bị cũ, dữ liệu
+ *    nhập tay) cho `NaN` ở mọi phép so sánh; không có bước tối thiểu thì thanh
+ *    tua treo cứng trong khi nút vẫn hiện "đang chạy".
+ */
+export function nextCursorByTime(
+  track: readonly RoutePoint[],
+  cursor: number,
+  advanceMs: number,
+): number {
+  const last = track.length - 1;
+  if (last < 1) return 0;
+  if (cursor >= last) return last;
+
+  const target = msOf(track[cursor]) + advanceMs;
+
+  let next = cursor + 1;
+  while (next < last && msOf(track[next]) < target) next++;
+  return next;
+}
 
 /** Thời gian đứng tại mỗi điểm để giao hàng (phút) — dùng khi tính lại ETA. */
 export const SERVICE_MINUTES_PER_STOP = 10;
@@ -512,7 +563,7 @@ export class DeliveryMonitorStore {
 
   private readonly _cursor = signal(0);
   private readonly _playing = signal(false);
-  private readonly _speed = signal<PlaybackSpeed>(4);
+  private readonly _speed = signal<PlaybackSpeed>(240);
 
   readonly cursor = this._cursor.asReadonly();
   readonly playing = this._playing.asReadonly();
@@ -535,6 +586,9 @@ export class DeliveryMonitorStore {
       // xe khác lên bản đồ chuyến mới — sai nghiêm trọng mà nhìn rất hợp lý.
       this._matchResult.set(null);
       this._matchProgress.set(0);
+      // Điểm đang được "bay tới" là một điểm giao của chuyến CŨ. Không xoá thì
+      // nó vẫn nằm đó chống lại việc bản đồ tự ôm trọn tuyến mới.
+      this._focus.set(null);
       this.closeForm();
     });
 
@@ -549,15 +603,24 @@ export class DeliveryMonitorStore {
     effect((onCleanup) => {
       if (!this._playing()) return;
 
-      const stepsPerTick = this._speed();
+      const multiplier = this._speed();
+
       const timer = setInterval(() => {
-        const next = this._cursor() + stepsPerTick;
-        if (next >= this.trackLength() - 1) {
-          this._cursor.set(Math.max(0, this.trackLength() - 1));
+        const track = this.track();
+        const last = track.length - 1;
+        if (last < 1) return;
+
+        const cursor = this._cursor();
+        if (cursor >= last) {
           this._playing.set(false);
           return;
         }
+
+        // Mỗi nhịp đồng hồ THẬT 220ms tương ứng `multiplier` × 220ms đồng hồ CHUYẾN.
+        const next = nextCursorByTime(track, cursor, multiplier * TICK_MS);
+
         this._cursor.set(next);
+        if (next >= last) this._playing.set(false);
       }, TICK_MS);
 
       onCleanup(() => clearInterval(timer));
@@ -1210,11 +1273,21 @@ export class DeliveryMonitorStore {
 
     if (this._showGpsPoints()) {
       const flags = this.deviationFlags();
-      // Chỉ hiện 1/4 số điểm — vẽ hết vài trăm marker DOM là trình duyệt giật.
+      const visible = this._cursor() + 1;
+
+      // Bước nhảy TÍNH THEO SỐ ĐIỂM ĐANG CÓ, không cố định 1/4.
+      //
+      // Mỗi chấm GPS là một marker DOM thật. Cố định `i % 4` nghĩa là số marker
+      // tỉ lệ thuận với độ dày của track: track dày lên gấp bốn thì trình duyệt
+      // phải dựng gấp bốn số node, và màn hình bắt đầu giật đúng lúc dữ liệu
+      // trở nên tốt hơn. Trần cứng ở đây giữ chi phí hiển thị không đổi bất kể
+      // thiết bị bắn log dày tới đâu.
+      const step = Math.max(1, Math.ceil(visible / MAX_GPS_DOTS));
+
       this.track()
-        .slice(0, this._cursor() + 1)
+        .slice(0, visible)
         .forEach((p, i) => {
-          if (i % 4 !== 0) return;
+          if (i % step !== 0) return;
           markers.push({
             key: `gps-${i}`,
             lat: p.lat,
@@ -1245,6 +1318,30 @@ export class DeliveryMonitorStore {
 
   // ---------------------------------------------------------------- thống kê
 
+  /**
+   * Quãng đường mà KẾ HOẠCH dự trù cho đúng phần xe đã đi được.
+   *
+   * ====== VÌ SAO KHÔNG SO THẲNG VỚI TỔNG QUÃNG ĐƯỜNG DỰ KIẾN ======
+   *
+   * Chuyến đang chạy dở thì "Thực tế" là quãng đường của NỬA chuyến, còn "Dự kiến"
+   * là quãng đường của CẢ chuyến. Trừ hai số đó cho nhau ra một con số âm to đùng,
+   * và màn hình khoe rằng tài xế đi tiết kiệm được 12 km — trong khi sự thật là
+   * anh ta còn 12 km nữa chưa đi. Cùng một phép trừ, đến cuối ngày lại đúng, nên
+   * lỗi này rất khó bị phát hiện qua ảnh chụp màn hình.
+   *
+   * Mốc so sánh đúng là phần kế hoạch TƯƠNG ỨNG: chiếu vị trí GPS mới nhất lên
+   * lộ trình dự kiến, lấy quãng đường dọc tuyến tới chỗ đó. Hiệu số khi ấy mới
+   * mang đúng nghĩa "đi thừa bao nhiêu so với kế hoạch" — và đoạn đi lệch tuyến
+   * hiện ra ngay ở đó.
+   */
+  readonly plannedSoFarMeters = computed(() => {
+    const planned = this.plannedPath();
+    const last = this.lastPoint();
+    if (planned.length < 2 || !last) return 0;
+
+    return projectOnPath({ lat: last.lat, lng: last.lng }, planned).alongMeters;
+  });
+
   readonly stats = computed<TripStats>(() => {
     const trip = this.trip();
     const planned = this.plannedPath();
@@ -1254,6 +1351,7 @@ export class DeliveryMonitorStore {
     if (!trip) {
       return {
         plannedDistanceMeters: 0,
+        plannedSoFarMeters: 0,
         actualDistanceMeters: 0,
         deliveredCount: 0,
         failedCount: 0,
@@ -1271,6 +1369,7 @@ export class DeliveryMonitorStore {
 
     return {
       plannedDistanceMeters: totalDistanceMeters(planned),
+      plannedSoFarMeters: this.plannedSoFarMeters(),
       // Quãng đường thực tế cộng từ chính GPS track, KHÔNG hỏi lại dịch vụ định
       // tuyến — đường thực tế đã là đường đi rồi, định tuyến lại là sai nghiệp vụ.
       actualDistanceMeters: totalDistanceMeters(

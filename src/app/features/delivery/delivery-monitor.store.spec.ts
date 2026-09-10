@@ -8,12 +8,13 @@ import {
   LatLng,
   MAP_ROUTING_CONFIG,
   MatchResult,
+  RoutePoint,
   RouteResult,
   RoutingFacade,
   totalDistanceMeters,
 } from '../../core/map';
 import { DeliveryMockApi } from './delivery-mock.api';
-import { DeliveryMonitorStore } from './delivery-monitor.store';
+import { DeliveryMonitorStore, nextCursorByTime } from './delivery-monitor.store';
 import { DeliveryStop, DeliveryTrip } from './delivery.models';
 
 /**
@@ -102,8 +103,14 @@ const matchTrack = vi.fn(
     }),
 );
 
+/** Cho phép từng test thay GPS track mà không phải dựng lại cả FakeApi. */
+let trackOverride: RoutePoint[] | null = null;
+
 class FakeApi {
-  getTrip = vi.fn(async (id: string) => ({ ...makeTrip(), id, code: `TRIP-${id}` }));
+  getTrip = vi.fn(async (id: string) => {
+    const trip = { ...makeTrip(), id, code: `TRIP-${id}` };
+    return trackOverride ? { ...trip, track: trackOverride } : trip;
+  });
   listTrips = () => [
     { id: 'T1', code: 'TRIP-TEST', driverName: 'Tài xế test', vehiclePlate: '29A-00000' },
     { id: 'T2', code: 'TRIP-KHAC', driverName: 'Tài xế khác', vehiclePlate: '29A-11111' },
@@ -115,11 +122,12 @@ class FakeApi {
   ];
 }
 
-async function setup() {
+async function setup(options: { track?: RoutePoint[] } = {}) {
   localStorage.clear();
   computeRoute.mockClear();
   matchTrack.mockClear();
   pendingMatch = null;
+  trackOverride = options.track ?? null;
 
   TestBed.configureTestingModule({
     providers: [
@@ -131,7 +139,11 @@ async function setup() {
       },
       {
         provide: GeocodeFacade,
-        useValue: { search: () => of([]), reverse: () => of('Địa chỉ giả'), providerLabel: () => 'fake' },
+        useValue: {
+          search: () => of([]),
+          reverse: () => of('Địa chỉ giả'),
+          providerLabel: () => 'fake',
+        },
       },
       DeliveryMonitorStore,
     ],
@@ -362,5 +374,243 @@ describe('DeliveryMonitorStore — khớp đường không được lạc sang c
     await second;
 
     expect(store.matchResult()).not.toBeNull();
+  });
+});
+
+/**
+ * ============ ĐỔI CHUYẾN LÀ BẢN ĐỒ PHẢI CHUYỂN THEO ============
+ *
+ * Lỗi người dùng báo: đổi chuyến giao hàng xong bản đồ vẫn nằm ở tuyến cũ, phải
+ * tự kéo đi tìm. Ở tầng store có hai điều kiện để bản đồ chuyển được:
+ *
+ *  1. `focus` (điểm đang được "bay tới") phải bị xoá — nó là một điểm giao của
+ *     chuyến CŨ, còn nằm đó là kéo khung nhìn ngược lại.
+ *  2. Dữ liệu vẽ (`markers`/`paths`) phải RỖNG trong lúc chờ tải, để lớp bản đồ
+ *     biết là chưa có gì để fit và chờ — thay vì fit vào dữ liệu chuyến cũ rồi
+ *     coi như đã xong việc.
+ *
+ * Phần thực hiện fit nằm ở `osm-map.component.spec.ts`.
+ */
+describe('DeliveryMonitorStore — khung nhìn khi đổi chuyến', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it('đổi chuyến -> xoá điểm focus của chuyến cũ', async () => {
+    const store = await setup();
+
+    store.selectStop('S3');
+    expect(store.focus()).not.toBeNull();
+
+    store.selectTrip('T2');
+    await TestBed.inject(ApplicationRef).whenStable();
+
+    expect(store.focus()).toBeNull();
+    expect(store.selectedStopId()).toBeNull();
+  });
+
+  it('trong lúc tải chuyến mới thì không còn marker/đường của chuyến cũ', async () => {
+    const store = await setup();
+    expect(store.markers().length).toBeGreaterThan(0);
+
+    store.selectTrip('T2');
+
+    // Khoảnh khắc giữa: chưa có dữ liệu mới, và tuyệt đối không được giữ dữ liệu cũ.
+    expect(store.markers()).toEqual([]);
+    expect(store.paths()).toEqual([]);
+
+    await TestBed.inject(ApplicationRef).whenStable();
+    expect(store.markers().length).toBeGreaterThan(0);
+  });
+
+  it('fitToken đổi theo chuyến để lớp bản đồ biết phải fit lại', async () => {
+    const store = await setup();
+    const before = store.tripId();
+
+    store.selectTrip('T2');
+    await TestBed.inject(ApplicationRef).whenStable();
+
+    expect(store.tripId()).not.toBe(before);
+  });
+});
+
+/**
+ * ============ TUA LẠI HÀNH TRÌNH PHẢI THEO ĐỒNG HỒ CHUYẾN ============
+ *
+ * Thiết bị GPS thật bắn log DÀY lúc xe chạy và THƯA lúc xe đứng. Tua theo chỉ số
+ * mảng vì thế cho ra kết quả ngược đời: quãng xe đứng một chỗ trôi qua chậm rề,
+ * còn quãng xe chạy thì vụt mất. Nhãn "4x" cũng không đo cái gì — thay bộ dữ liệu
+ * dày hơn là cùng một nhãn ấy chạy chậm đi bốn lần.
+ */
+describe('DeliveryMonitorStore — tua lại theo đồng hồ chuyến', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  /**
+   * Track lấy mẫu KHÔNG ĐỀU, đúng như thiết bị thật:
+   *  - 30 bản ghi lúc chạy, mỗi 20 giây (cách nhau ~150 m),
+   *  - rồi 20 bản ghi lúc đỗ giao hàng, mỗi 90 giây, đứng yên một chỗ.
+   */
+  function unevenTrack(): RoutePoint[] {
+    const start = Date.UTC(2026, 8, 9, 7, 0, 0);
+    const points: RoutePoint[] = [];
+
+    for (let i = 0; i < 30; i++) {
+      points.push({
+        lat: 21 + i * 0.0015,
+        lng: 105.8,
+        createDate: new Date(start + i * 20_000).toISOString(),
+      });
+    }
+
+    const last = points[points.length - 1];
+    const parkedFrom = start + 30 * 20_000;
+    for (let i = 0; i < 20; i++) {
+      points.push({
+        lat: last.lat,
+        lng: last.lng,
+        createDate: new Date(parkedFrom + i * 90_000).toISOString(),
+      });
+    }
+
+    return points;
+  }
+
+  const msAt = (track: readonly RoutePoint[], index: number) =>
+    Date.parse(track[index].createDate!);
+
+  it('mỗi nhịp tua nhích đúng một lượng THỜI GIAN, không phải một số phần tử', () => {
+    const track = unevenTrack();
+
+    // 60× thời gian thật, nhịp 220ms -> 13,2 giây chuyến mỗi nhịp.
+    const next = nextCursorByTime(track, 0, 60 * 220);
+    const stepped = msAt(track, next) - msAt(track, 0);
+
+    // Vừa đủ vượt 13,2 giây, chứ không phải nhảy nguyên một phần tử 20 giây.
+    expect(stepped).toBeGreaterThanOrEqual(13_200);
+    expect(stepped).toBeLessThan(13_200 + 20_000);
+  });
+
+  it('tua nhanh gấp đôi thì đồng hồ chuyến chạy nhanh gấp đôi', () => {
+    const track = unevenTrack();
+
+    const run = (multiplier: number, ticks: number) => {
+      let cursor = 0;
+      for (let i = 0; i < ticks; i++) cursor = nextCursorByTime(track, cursor, multiplier * 220);
+      return msAt(track, cursor) - msAt(track, 0);
+    };
+
+    const slow = run(60, 10);
+    const fast = run(120, 10);
+
+    expect(fast).toBeGreaterThan(slow * 1.8);
+    expect(fast).toBeLessThan(slow * 2.2);
+  });
+
+  /**
+   * Mật độ lấy mẫu KHÔNG được ảnh hưởng tới tốc độ tua. Đây chính là thứ bản cũ
+   * làm sai: cùng nhãn "4x", track dày gấp bốn thì tua chậm đi bốn lần.
+   */
+  it('làm dày dữ liệu lên gấp bốn không làm tua chậm đi', () => {
+    const sparse = unevenTrack();
+
+    // Cùng khoảng thời gian, cùng hình học, chỉ lấy mẫu dày gấp 4.
+    const dense: RoutePoint[] = [];
+    for (let i = 0; i < sparse.length - 1; i++) {
+      const from = msAt(sparse, i);
+      const span = msAt(sparse, i + 1) - from;
+      for (let k = 0; k < 4; k++) {
+        dense.push({
+          lat: sparse[i].lat + ((sparse[i + 1].lat - sparse[i].lat) * k) / 4,
+          lng: sparse[i].lng,
+          createDate: new Date(from + (span * k) / 4).toISOString(),
+        });
+      }
+    }
+    dense.push(sparse[sparse.length - 1]);
+
+    // Tua ở 240× -> mỗi nhịp 52,8 giây chuyến, thừa sức vượt bước lấy mẫu 20 giây
+    // của bản thưa. (Không thể tua CHẬM hơn bước lấy mẫu: con trỏ luôn phải nhích
+    // ít nhất một bản ghi, đó là giới hạn của chính dữ liệu chứ không phải của
+    // thuật toán.)
+    const elapsed = (track: RoutePoint[]) => {
+      let cursor = 0;
+      for (let i = 0; i < 6; i++) cursor = nextCursorByTime(track, cursor, 240 * 220);
+      return msAt(track, cursor) - msAt(track, 0);
+    };
+
+    const a = elapsed(sparse);
+    const b = elapsed(dense);
+
+    expect(Math.abs(a - b) / a).toBeLessThan(0.15);
+  });
+
+  it('khoảng trống dài vẫn được bước qua — không bao giờ treo thanh tua', () => {
+    const track = unevenTrack();
+
+    // Ngay trước quãng đỗ: hai bản ghi cách nhau 90 giây, trong khi một nhịp tua
+    // chỉ nhích 13,2 giây chuyến.
+    const parked = track.findIndex((p, i, arr) => {
+      const next = arr[i + 1];
+      return next ? Date.parse(next.createDate!) - Date.parse(p.createDate!) > 60_000 : false;
+    });
+    expect(parked).toBeGreaterThan(0);
+
+    expect(nextCursorByTime(track, parked, 60 * 220)).toBe(parked + 1);
+  });
+
+  it('track thiếu mốc thời gian vẫn tua được, không đứng im', () => {
+    const broken: RoutePoint[] = [
+      { lat: 21, lng: 105.8 },
+      { lat: 21.001, lng: 105.8 },
+      { lat: 21.002, lng: 105.8 },
+    ];
+
+    expect(nextCursorByTime(broken, 0, 13_200)).toBe(1);
+    expect(nextCursorByTime(broken, 1, 13_200)).toBe(2);
+  });
+
+  it('tới cuối track thì đứng lại ở điểm cuối', () => {
+    const track = unevenTrack();
+    const last = track.length - 1;
+
+    expect(nextCursorByTime(track, last, 60 * 220)).toBe(last);
+    expect(nextCursorByTime(track, last - 1, 960 * 220)).toBe(last);
+    expect(nextCursorByTime([], 0, 1000)).toBe(0);
+  });
+
+  /**
+   * "Thực tế" là quãng đường của NỬA chuyến, "Dự kiến" là của CẢ chuyến. Trừ hai
+   * số đó cho nhau rồi gọi là "chênh lệch" thì màn hình khoe tài xế tiết kiệm
+   * được cả chục km, trong khi sự thật là anh ta chưa đi nốt.
+   */
+  it('so quãng đường thực tế với ĐÚNG phần kế hoạch tương ứng, không với cả tuyến', async () => {
+    const store = await setup();
+
+    const stats = store.stats();
+    expect(stats.plannedDistanceMeters).toBeGreaterThan(0);
+
+    // Xe mới đi được một phần -> mốc so sánh phải nhỏ hơn hẳn tổng cả tuyến.
+    expect(stats.plannedSoFarMeters).toBeGreaterThan(0);
+    expect(stats.plannedSoFarMeters).toBeLessThan(stats.plannedDistanceMeters);
+
+    // Và chênh lệch phải tính trên mốc đó.
+    const delta = stats.actualDistanceMeters - stats.plannedSoFarMeters;
+    expect(Math.abs(delta)).toBeLessThan(
+      Math.abs(stats.actualDistanceMeters - stats.plannedDistanceMeters),
+    );
+  });
+
+  /**
+   * Mỗi chấm GPS là một node DOM. Cố định "vẽ 1/4 số điểm" nghĩa là dữ liệu dày
+   * lên gấp bốn thì trình duyệt phải dựng gấp bốn số node — màn hình bắt đầu giật
+   * đúng vào lúc dữ liệu trở nên tốt hơn.
+   */
+  it('số chấm GPS có trần, không tỉ lệ thuận với độ dày dữ liệu', async () => {
+    const store = await setup({ track: unevenTrack() });
+
+    store.toggleGpsPoints();
+    store.seek(store.trackLength() - 1);
+
+    const dots = store.markers().filter((m) => m.key.startsWith('gps-'));
+    expect(dots.length).toBeGreaterThan(0);
+    expect(dots.length).toBeLessThanOrEqual(140);
   });
 });

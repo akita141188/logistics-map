@@ -201,7 +201,9 @@ export class ViettelMapComponent {
       if (!this.ready() || token === this.appliedFitToken || !coords.length) return;
 
       this.appliedFitToken = token;
-      this.mapService.fitToPoints(coords);
+      // `fitToPoints` nhận cả [lng, lat] lẫn object — truyền dạng tuple cho rõ
+      // ràng thứ tự toạ độ, đây là chỗ hay lẫn nhất của nhánh Viettel.
+      this.mapService.fitToPoints(coords.map((p) => [p.lng, p.lat] as [number, number]));
     });
 
     // 6) Bay tới một điểm.

@@ -52,7 +52,13 @@ export interface DeliveryTrip {
 
 /** Số liệu tổng hợp hiển thị ở thanh KPI của màn giám sát. */
 export interface TripStats {
+  /** Quãng đường kế hoạch của CẢ chuyến. */
   plannedDistanceMeters: number;
+  /**
+   * Quãng đường kế hoạch dự trù cho ĐÚNG phần xe đã đi được — mốc so sánh hợp lệ
+   * duy nhất khi chuyến còn đang chạy dở. Xem `DeliveryMonitorStore.plannedSoFarMeters`.
+   */
+  plannedSoFarMeters: number;
   actualDistanceMeters: number;
   /** Số điểm đã giao thành công / tổng số điểm. */
   deliveredCount: number;

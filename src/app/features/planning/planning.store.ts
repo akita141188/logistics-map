@@ -105,9 +105,7 @@ export class PlanningStore {
   readonly focus = this._focus.asReadonly();
   readonly highlightOrderId = this._highlightOrderId.asReadonly();
 
-  readonly busy = computed(() =>
-    ['matrix', 'solving', 'routing'].includes(this._phase()),
-  );
+  readonly busy = computed(() => ['matrix', 'solving', 'routing'].includes(this._phase()));
 
   readonly hasPlan = computed(() => this._assignment().size > 0);
 
@@ -162,8 +160,7 @@ export class PlanningStore {
         const order = orderById.get(ids[i])!;
         const hour = this.msToHour(clock);
 
-        const violation =
-          hour < order.windowFrom ? 'early' : hour > order.windowTo ? 'late' : null;
+        const violation = hour < order.windowFrom ? 'early' : hour > order.windowTo ? 'late' : null;
         if (violation) violations++;
 
         stops.push({
@@ -659,7 +656,9 @@ export class PlanningStore {
         color: info?.color ?? MAP_COLORS.pending,
         active: order.id === highlight,
         // Xe đang chọn -> làm mờ đơn của xe khác bằng cách thu nhỏ (dot).
-        dot: !!selectedVehicle && info?.plate !== routes.find((r) => r.vehicle.id === selectedVehicle)?.vehicle.plate,
+        dot:
+          !!selectedVehicle &&
+          info?.plate !== routes.find((r) => r.vehicle.id === selectedVehicle)?.vehicle.plate,
       });
     }
 
@@ -680,7 +679,18 @@ export class PlanningStore {
       }));
   });
 
-  readonly fitToken = computed(() => `${this.routes().length}-${this.selectedOrders().length}`);
+  /**
+   * Chỉ SỐ LƯỢNG tuyến là không đủ để nhận ra "kế hoạch đã đổi": chia lại đơn
+   * cho cùng số xe thì con số đó không nhích, mà hình tuyến thì khác hoàn toàn.
+   * Ký hiệu ở đây gộp cả số điểm trên từng tuyến nên chuyển đơn giữa các xe hay
+   * tối ưu lại đều được bản đồ ôm lại khung nhìn.
+   */
+  readonly fitToken = computed(
+    () =>
+      `${this.selectedOrders().length}:${this.routes()
+        .map((r) => `${r.vehicle.id}x${r.stops.length}`)
+        .join(',')}`,
+  );
 
   // ------------------------------------------------------------------ tiện ích
 

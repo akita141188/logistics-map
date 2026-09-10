@@ -29,12 +29,33 @@ export interface CleanOptions {
   minSpacingMeters: number;
   /** Cách nhau lâu hơn ngần này giây thì tính là ĐỨT track (giây). */
   gapSeconds: number;
+  /**
+   * Xe đứng yên lâu hơn ngần này giây thì GIỮ LẠI một bản ghi, dù nó nằm trong
+   * bán kính nhiễu (giây).
+   *
+   * ====== VÌ SAO PHẢI CÓ ======
+   *
+   * Gộp nhiễu lúc đứng yên là đúng, nhưng gộp SẠCH thì xoá luôn bằng chứng rằng
+   * thiết bị vẫn đang báo về. Một xe đỗ 37 phút ở cửa hàng để giao hàng, log bắn
+   * đều đặn mỗi 90 giây, sau khi gộp còn đúng hai bản ghi cách nhau 37 phút —
+   * không tài nào phân biệt được với một chiếc xe TẮT MÁY MẤT SÓNG 37 phút.
+   *
+   * Hậu quả rất cụ thể: `findGaps` báo "đứt track", màn hình bắn cảnh báo
+   * "Mất tín hiệu 37 phút — không có dữ liệu từ 08:52 đến 09:29" trong khi dữ
+   * liệu có đủ, xe chỉ đang đứng giao hàng. Cảnh báo giả kiểu này bào mòn lòng
+   * tin vào cả bảng cảnh báo.
+   *
+   * Giữ lại nhịp bản ghi thưa lúc đứng yên tốn thêm vài chục điểm cho mỗi chuyến
+   * và gần như không cộng thêm mét nào (các điểm nằm trong bán kính nhiễu).
+   */
+  maxStationarySeconds: number;
 }
 
 export const DEFAULT_CLEAN_OPTIONS: CleanOptions = {
   maxSpeedKmh: 130,
   minSpacingMeters: 8,
   gapSeconds: 15 * 60,
+  maxStationarySeconds: 5 * 60,
 };
 
 export interface TrackGap {
@@ -94,10 +115,9 @@ export function cleanTrack(
       continue;
     }
 
-    // Nhiễu khi đứng yên: gộp vào điểm trước. KHÔNG xoá hẳn thông tin thời gian —
-    // điểm sau sẽ mang mốc thời gian mới nhất, nhờ vậy phần "phát hiện dừng đỗ"
-    // vẫn biết xe đã đứng ở đây bao lâu.
-    if (meters < opt.minSpacingMeters) {
+    // Nhiễu khi đứng yên: gộp vào điểm trước — TRỪ KHI đã gộp quá lâu. Xem
+    // `maxStationarySeconds` để biết vì sao không được gộp sạch.
+    if (meters < opt.minSpacingMeters && !(seconds > opt.maxStationarySeconds)) {
       removedJitter++;
       continue;
     }

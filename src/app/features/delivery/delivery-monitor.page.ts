@@ -86,7 +86,9 @@ export class DeliveryMonitorPage {
   /** Chênh lệch quãng đường thực tế so với kế hoạch. */
   protected readonly distanceDelta = computed(() => {
     const s = this.store.stats();
-    return s.actualDistanceMeters - s.plannedDistanceMeters;
+    // So với phần kế hoạch TƯƠNG ỨNG, không so với cả tuyến — xem
+    // `DeliveryMonitorStore.plannedSoFarMeters`.
+    return s.actualDistanceMeters - s.plannedSoFarMeters;
   });
 
   protected readonly searchItems = computed<GeocodeResult[]>(

@@ -11,10 +11,11 @@ import {
   maneuverIcon,
   pointAtAlong,
   projectOnPath,
+  slicePathByDistance,
   stepOffsets,
   updateOffRoute,
 } from './navigation.util';
-import { destinationPoint, distanceMeters } from './geo.util';
+import { destinationPoint, distanceMeters, totalDistanceMeters } from './geo.util';
 import { LatLng, RouteStep } from './map.types';
 
 /** Một tuyến chữ L: 1 km về phía đông rồi 1 km lên phía bắc. */
@@ -254,5 +255,84 @@ describe('updateOffRoute — phát hiện đi sai đường', () => {
     state = updateOffRoute(state, 20, opts);
     expect(state.offRoute).toBe(false);
     expect(state.consecutive).toBe(0);
+  });
+});
+
+/**
+ * =========== CẮT TUYẾN THEO QUÃNG ĐƯỜNG (vẽ đường kiểu Google Maps) ===========
+ *
+ * Màn dẫn đường tô ba sắc độ trên CÙNG một tuyến: phần đã đi (xám), chặng tới
+ * điểm dừng kế tiếp (xanh đậm), phần chưa tới (xanh nhạt). Ba khúc đó phải
+ * KHỚP MÉP nhau và không được phụ thuộc mật độ đỉnh polyline — nếu không thì
+ * đường vẽ hở, chồng, hoặc co giật theo nhiễu GPS.
+ */
+describe('slicePathByDistance — cắt khúc hình học theo mét', () => {
+  it('cắt giữa đoạn thì nội suy đúng hai đầu, không rơi về đỉnh gần nhất', () => {
+    const path = lRoute(); // 1 km đông + 1 km bắc, chỉ có 3 đỉnh
+    const cum = cumulativeAlong(path);
+
+    const slice = slicePathByDistance(path, cum, 300, 700);
+
+    expect(totalDistanceMeters(slice)).toBeCloseTo(400, 0);
+    expect(distanceMeters(slice[0], destinationPoint(path[0], 90, 300))).toBeLessThan(1);
+    expect(
+      distanceMeters(slice[slice.length - 1], destinationPoint(path[0], 90, 700)),
+    ).toBeLessThan(1);
+  });
+
+  it('khúc bắc qua đỉnh thì GIỮ LẠI đỉnh đó — bỏ là đường cắt góc qua nhà dân', () => {
+    const path = lRoute();
+    const cum = cumulativeAlong(path);
+
+    // 800 m -> 1200 m: vượt qua khúc rẽ ở mốc 1000 m.
+    const slice = slicePathByDistance(path, cum, 800, 1200);
+
+    expect(slice.length).toBe(3);
+    expect(distanceMeters(slice[1], path[1])).toBeLessThan(1);
+    // Đi theo đường thật (2 x 200 m) chứ không cắt chéo (~283 m).
+    expect(totalDistanceMeters(slice)).toBeCloseTo(400, 0);
+  });
+
+  it('ba khúc liên tiếp khớp mép và cộng lại đúng bằng cả tuyến', () => {
+    const path = lRoute();
+    const cum = cumulativeAlong(path);
+    const total = cum[cum.length - 1];
+
+    const a = slicePathByDistance(path, cum, 0, 600);
+    const b = slicePathByDistance(path, cum, 600, 1400);
+    const c = slicePathByDistance(path, cum, 1400, total);
+
+    expect(distanceMeters(a[a.length - 1], b[0])).toBeLessThan(0.01);
+    expect(distanceMeters(b[b.length - 1], c[0])).toBeLessThan(0.01);
+
+    const sum = totalDistanceMeters(a) + totalDistanceMeters(b) + totalDistanceMeters(c);
+    expect(sum).toBeCloseTo(total, 0);
+  });
+
+  it('khúc rỗng trả mảng rỗng, không trả mảng 1 điểm', () => {
+    const path = lRoute();
+    const cum = cumulativeAlong(path);
+
+    // Xe đang ở đầu tuyến -> phần "đã đi" chưa tồn tại.
+    expect(slicePathByDistance(path, cum, 0, 0)).toEqual([]);
+    // Đã về đích -> phần "còn phải đi" không tồn tại.
+    expect(slicePathByDistance(path, cum, 2000, 2000)).toEqual([]);
+    // Khoảng đảo ngược cũng phải rỗng, không được vẽ ngược.
+    expect(slicePathByDistance(path, cum, 900, 400)).toEqual([]);
+  });
+
+  it('kẹp vào trong tuyến khi mốc vượt biên (tiến độ nhích quá tổng chiều dài)', () => {
+    const path = lRoute();
+    const cum = cumulativeAlong(path);
+    const total = cum[cum.length - 1];
+
+    const slice = slicePathByDistance(path, cum, -500, total + 500);
+
+    expect(totalDistanceMeters(slice)).toBeCloseTo(total, 0);
+  });
+
+  it('tuyến chưa có hình học thì trả rỗng thay vì nổ', () => {
+    expect(slicePathByDistance([], undefined, 0, 100)).toEqual([]);
+    expect(slicePathByDistance([{ lat: 21, lng: 105.8 }], undefined, 0, 100)).toEqual([]);
   });
 });

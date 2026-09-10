@@ -44,16 +44,24 @@
           <strong class="kpi__value kpi__value--warn">{{ stats.lateCount }}</strong>
         </div>
         <div class="kpi__item">
-          <span class="kpi__label">Dự kiến</span>
+          <span class="kpi__label">Dự kiến cả tuyến</span>
           <strong class="kpi__value">{{ formatDistance(stats.plannedDistanceMeters) }}</strong>
         </div>
         <div class="kpi__item">
-          <span class="kpi__label">Thực tế</span>
+          <span class="kpi__label">Thực tế đã đi</span>
           <strong class="kpi__value">{{ formatDistance(stats.actualDistanceMeters) }}</strong>
         </div>
         <div class="kpi__item">
-          <span class="kpi__label">Chênh lệch</span>
-          <strong class="kpi__value" [class.kpi__value--warn]="distanceDelta() > 500">
+          <span class="kpi__label">Đi thừa</span>
+          <strong
+            class="kpi__value"
+            [class.kpi__value--warn]="distanceDelta() > 500"
+            [title]="
+              'So với ' +
+              formatDistance(stats.plannedSoFarMeters) +
+              ' mà kế hoạch dự trù cho đúng đoạn xe đã đi'
+            "
+          >
             {{ distanceDelta() > 0 ? '+' : '' }}{{ formatDistance(distanceDelta()) }}
           </strong>
         </div>
@@ -568,9 +576,14 @@
         </div>
       </div>
 
-      <select class="player__speed" [value]="store.speed()" (change)="onSpeed($event)">
+      <select
+        class="player__speed"
+        title="Bội số thời gian thật: 240x nghĩa là 1 giây xem bằng 4 phút chạy xe"
+        [value]="store.speed()"
+        (change)="onSpeed($event)"
+      >
         @for (s of speeds; track s) {
-          <option [value]="s">{{ s }}×</option>
+          <option [value]="s">{{ s }}x</option>
         }
       </select>
     </div>

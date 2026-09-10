@@ -57,10 +57,33 @@ describe('cleanTrack — lọc nhiễu GPS', () => {
       createDate: new Date(Date.UTC(2026, 8, 9, 7, 0, 0) + i * 30_000).toISOString(),
     }));
 
-    const result = cleanTrack(idle, { minSpacingMeters: 8 });
+    const result = cleanTrack(idle, { minSpacingMeters: 8, maxStationarySeconds: 5 * 60 });
 
-    expect(result.points).toHaveLength(1);
-    expect(result.removedJitter).toBe(19);
+    // 20 điểm × 30 s = 9,5 phút đứng yên -> gộp gần hết, nhưng giữ lại nhịp mốc
+    // mỗi 5 phút để không biến chỗ đỗ thành chỗ "mất tín hiệu".
+    expect(result.points).toHaveLength(2);
+    expect(result.removedJitter).toBe(18);
+
+    // Gộp xong vẫn không được cộng thêm mét nào đáng kể.
+    expect(totalDistanceMeters(result.points)).toBeLessThan(5);
+  });
+
+  /**
+   * Gộp nhiễu SẠCH thì xoá luôn bằng chứng rằng thiết bị vẫn báo về, và một chiếc
+   * xe đang đỗ giao hàng bị `findGaps` kết luận là mất tín hiệu.
+   */
+  it('xe đỗ lâu vẫn giữ nhịp bản ghi, không bị hiểu nhầm thành mất tín hiệu', () => {
+    // Đỗ 40 phút, thiết bị bắn log mỗi 90 giây, toạ độ rung trong bán kính 2 m.
+    const parked: RoutePoint[] = Array.from({ length: 27 }, (_, i) => ({
+      lat: 21 + (i % 3) * 0.00001,
+      lng: 105.8 + (i % 2) * 0.00001,
+      createDate: new Date(Date.UTC(2026, 8, 9, 7, 0, 0) + i * 90_000).toISOString(),
+    }));
+
+    const cleaned = cleanTrack(parked, { minSpacingMeters: 8, maxStationarySeconds: 5 * 60 });
+
+    // Ngưỡng "đứt track" 15 phút không được chạm tới.
+    expect(findGaps(cleaned.points, 15 * 60)).toHaveLength(0);
   });
 
   it('phần "đường ma" do nhiễu bị cắt khỏi quãng đường thực tế', () => {
